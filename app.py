@@ -171,7 +171,7 @@ def get_column_mapping(file_type):
         return None
 
 def create_professional_excel_from_data(technician_df, file_type):
-    """Create a formatted Excel file from existing test data"""
+    """Create a professionally formatted Excel file from existing test data"""
     
     mapping = get_column_mapping(file_type)
     if not mapping:
@@ -426,7 +426,7 @@ def analyze_csv_file(uploaded_file):
     return df, file_type
 
 def convert_machine_to_technician(df, file_type):
-    """Convert machine CSV to technician format"""
+    """Convert machine CSV to technician-friendly format"""
     
     mapping = get_column_mapping(file_type)
     if not mapping:
@@ -488,7 +488,7 @@ def convert_to_readable_values(df, file_type):
 
 def main():
     st.title("⚙️ Universal Seal Test Manager")
-    st.markdown("### File Analysis")
+    st.markdown("### Enhanced with NaN/INF Handling & File Analysis")
     
     # Sidebar
     st.sidebar.title("🔧 Operations")
@@ -511,9 +511,9 @@ def main():
         
         st.success(f"""
         **🎯 This {template_type} template includes:**
-        - 🎨 **borders** and cell formatting
+        - 🎨 **Professional borders** and cell formatting
         - 📋 **Real dropdown menus** (no manual setup needed)
-        - 🔵 **headers** with white text
+        - 🔵 **Colored headers** with white text
         - 📐 **Centered alignment** for numbers
         - 📝 **Instructions sheet** with guidance
         - 💡 **Data validation** to prevent errors
@@ -621,12 +621,12 @@ def main():
     elif operation == "📤 Machine CSV to Excel":
         st.header("Convert Machine CSV to Excel")
         st.info("""
-        ** operation :**
+        **This operation will:**
         - 🔍 **Analyze** your CSV file structure
         - 🛡️ **Handle NaN/INF** values automatically  
         - 🔄 **Detect file type** (Main Seal or Separation Seal)
         - 📊 **Show detailed information** about your data
-        - 💾 **Convert to Excel format**
+        - 💾 **Convert to professional Excel format**
         """)
         
         uploaded_file = st.file_uploader("Upload machine CSV file", type=['csv'])
@@ -661,13 +661,13 @@ def main():
                             with col3:
                                 st.metric("File Type", seal_type)
                             
-                            # Create Excel for download
-                            st.subheader("💾 Download Excel")
-                            excel_output = create_excel_from_data(technician_df, file_type)
+                            # Create professional Excel for download
+                            st.subheader("💾 Download Professional Excel")
+                            excel_output = create_professional_excel_from_data(technician_df, file_type)
                             
                             if excel_output:
                                 st.download_button(
-                                    label="📥 Download Excel file",
+                                    label="📥 Download Professional Excel",
                                     data=excel_output.getvalue(),
                                     file_name=f"{file_type}_professional_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
                                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -679,7 +679,7 @@ def main():
             except Exception as e:
                 st.error(f"❌ Error converting file: {str(e)}")
     
-    elif operation == " View Current Test":
+    elif operation == "👀 View Current Test":
         st.header("Current Test Sequence")
         
         # File selection
@@ -717,23 +717,23 @@ def main():
                         auto_steps = len(df[df['TST_APFlag'] == 1])
                         st.metric("Auto Proceed Steps", auto_steps)
                 
-                # Display in technician format
+                # Display in technician-friendly format
                 st.subheader(f"Current {seal_type} Test Sequence")
                 st.dataframe(technician_df, use_container_width=True, height=500)
                 
-                # Download as Excel button
-                st.subheader("💾 Download Current Test as Excel")
+                # Download as Professional Excel button
+                st.subheader("💾 Download Current Test as Professional Excel")
                 
                 # Create professional Excel file
-                excel_output = create_excel_from_data(technician_df, file_type)
+                excel_output = create_professional_excel_from_data(technician_df, file_type)
                 
                 if excel_output:
                     st.download_button(
-                        label="📥 Download as Excel",
+                        label="📥 Download as Professional Excel",
                         data=excel_output.getvalue(),
                         file_name=f"current_{file_type}_test_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        help="Download this test sequence with Excel formatting"
+                        help="Download this test sequence with professional Excel formatting"
                     )
         
         except Exception as e:
@@ -766,4 +766,3 @@ def convert_to_machine_codes(df, file_type):
 
 if __name__ == "__main__":
     main()
-    
