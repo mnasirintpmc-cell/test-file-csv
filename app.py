@@ -19,6 +19,11 @@ def detect_file_type(df):
     elif 'TST_SepSealFlwSet1' in columns:
         return 'separation_seal'
     else:
+        # Check for technician column names
+        if 'Cell_Pressure_bar' in columns:
+            return 'main_seal'
+        elif 'Sep_Seal_Flow_Set1' in columns:
+            return 'separation_seal'
         return 'unknown'
 
 def get_column_mapping(file_type):
@@ -40,6 +45,21 @@ def get_column_mapping(file_type):
                 'Test_Mode': 'TST_TestMode',
                 'Measurement': 'TST_MeasurementReq',
                 'Torque_Check': 'TST_TorqueCheck'
+            },
+            'machine_to_technician': {
+                'TST_SpeedDem': 'Speed_RPM',
+                'TST_CellPresDemand': 'Cell_Pressure_bar',
+                'TST_InterPresDemand': 'Interface_Pressure_bar',
+                'TST_InterBPDemand_DE': 'BP_Drive_End_bar',
+                'TST_InterBPDemand_NDE': 'BP_Non_Drive_End_bar',
+                'TST_GasInjectionDemand': 'Gas_Injection_bar',
+                'TST_StepDuration': 'Duration_s',
+                'TST_APFlag': 'Auto_Proceed',
+                'TST_TempDemand': 'Temperature_C',
+                'TST_GasType': 'Gas_Type',
+                'TST_TestMode': 'Test_Mode',
+                'TST_MeasurementReq': 'Measurement',
+                'TST_TorqueCheck': 'Torque_Check'
             },
             'headers': [
                 'Step', 'Speed_RPM', 'Cell_Pressure_bar', 'Interface_Pressure_bar',
@@ -71,6 +91,20 @@ def get_column_mapping(file_type):
                 'Gas_Type': 'TST_GasType',
                 'Measurement': 'TST_MeasurementReq',
                 'Torque_Check': 'TST_TorqueCheck'
+            },
+            'machine_to_technician': {
+                'TST_SpeedDem': 'Speed_RPM',
+                'TST_SepSealFlwSet1': 'Sep_Seal_Flow_Set1',
+                'TST_SepSealFlwSet2': 'Sep_Seal_Flow_Set2',
+                'TST_SepSealPSet1': 'Sep_Seal_Pressure_Set1',
+                'TST_SepSealPSet2': 'Sep_Seal_Pressure_Set2',
+                'TST_SepSealControlTyp': 'Sep_Seal_Control_Type',
+                'TST_StepDuration': 'Duration_s',
+                'TST_APFlag': 'Auto_Proceed',
+                'TST_TempDemand': 'Temperature_C',
+                'TST_GasType': 'Gas_Type',
+                'TST_MeasurementReq': 'Measurement',
+                'TST_TorqueCheck': 'Torque_Check'
             },
             'headers': [
                 'Step', 'Speed_RPM', 'Sep_Seal_Flow_Set1', 'Sep_Seal_Flow_Set2',
@@ -450,46 +484,71 @@ def create_professional_excel_from_data(technician_df, file_type):
 def excel_to_machine_csv(excel_file):
     """Convert technician Excel to machine-readable CSV"""
     
-    # Read Excel file
-    df = pd.read_excel(excel_file, sheet_name='TEST_SEQUENCE')
-    
-    # Remove empty rows
-    df = df.dropna(subset=['Step']).reset_index(drop=True)
-    
-    # Detect file type based on columns present
-    file_type = detect_file_type(df)
-    mapping = get_column_mapping(file_type)
-    
-    if not mapping:
-        st.error("Unsupported file format. Please use the provided templates.")
+    try:
+        # Read Excel file
+        df = pd.read_excel(excel_file, sheet_name='TEST_SEQUENCE')
+        
+        # Remove empty rows
+        df = df.dropna(subset=['Step']).reset_index(drop=True)
+        
+        # Detect file type based on columns present
+        file_type = detect_file_type(df)
+        mapping = get_column_mapping(file_type)
+        
+        if not mapping:
+            st.error("Unsupported file format. Please use the provided templates.")
+            return None
+        
+        # DEBUG: Show what columns we have
+        st.info(f"📊 Found columns: {list(df.columns)}")
+        
+        # Rename columns - only rename the ones that exist
+        existing_columns = df.columns.tolist()
+        rename_dict = {}
+        
+        for tech_col, machine_col in mapping['technician_to_machine'].items():
+            if tech_col in existing_columns:
+                rename_dict[tech_col] = machine_col
+        
+        df = df.rename(columns=rename_dict)
+        
+        # Convert readable values back to machine codes
+        df = convert_to_machine_codes(df, file_type)
+        
+        # Remove Step and Notes columns for machine CSV (if they exist)
+        columns_to_drop = ['Step', 'Notes']
+        machine_df = df.drop([col for col in columns_to_drop if col in df.columns], axis=1)
+        
+        # DEBUG: Show final columns
+        st.info(f"🔧 Final machine columns: {list(machine_df.columns)}")
+        
+        return machine_df, file_type
+        
+    except Exception as e:
+        st.error(f"❌ Error reading Excel file: {str(e)}")
         return None
-    
-    # Rename columns
-    df = df.rename(columns=mapping['technician_to_machine'])
-    
-    # Convert readable values back to machine codes
-    df = convert_to_machine_codes(df, file_type)
-    
-    # Remove Step and Notes columns for machine CSV
-    columns_to_drop = ['Step', 'Notes']
-    machine_df = df.drop([col for col in columns_to_drop if col in df.columns], axis=1)
-    
-    return machine_df, file_type
 
 def convert_to_machine_codes(df, file_type):
     """Convert readable values to machine codes"""
     
     # Common conversions
     if 'TST_APFlag' in df.columns:
-        df['TST_APFlag'] = df['TST_APFlag'].map({'Yes': 1, 'No': 0})
+        df['TST_APFlag'] = df['TST_APFlag'].map({'Yes': 1, 'No': 0, 'YES': 1, 'NO': 0})
+        # Fill any NaN values with 0
+        df['TST_APFlag'] = df['TST_APFlag'].fillna(0)
+    
     if 'TST_MeasurementReq' in df.columns:
-        df['TST_MeasurementReq'] = df['TST_MeasurementReq'].map({'Yes': 1, 'No': 0})
+        df['TST_MeasurementReq'] = df['TST_MeasurementReq'].map({'Yes': 1, 'No': 0, 'YES': 1, 'NO': 0})
+        df['TST_MeasurementReq'] = df['TST_MeasurementReq'].fillna(0)
+    
     if 'TST_TorqueCheck' in df.columns:
-        df['TST_TorqueCheck'] = df['TST_TorqueCheck'].map({'Yes': 1, 'No': 0})
+        df['TST_TorqueCheck'] = df['TST_TorqueCheck'].map({'Yes': 1, 'No': 0, 'YES': 1, 'NO': 0})
+        df['TST_TorqueCheck'] = df['TST_TorqueCheck'].fillna(0)
     
     # Type-specific conversions
     if file_type == 'main_seal' and 'TST_TestMode' in df.columns:
-        df['TST_TestMode'] = df['TST_TestMode'].map({'Mode 1': 1, 'Mode 2': 2})
+        df['TST_TestMode'] = df['TST_TestMode'].map({'Mode 1': 1, 'Mode 2': 2, 'MODE 1': 1, 'MODE 2': 2})
+        df['TST_TestMode'] = df['TST_TestMode'].fillna(1)
     
     return df
 
@@ -508,7 +567,7 @@ def machine_csv_to_excel(csv_file):
         return None
     
     # Convert to technician format
-    machine_to_tech = {v: k for k, v in mapping['technician_to_machine'].items()}
+    machine_to_tech = mapping['machine_to_technician']
     df = df.rename(columns=machine_to_tech)
     
     # Convert machine codes to readable values
@@ -695,46 +754,4 @@ def main():
                         temp_max = df['TST_TempDemand'].max()
                         st.metric("Temperature Range", f"{temp_min}°C - {temp_max}°C")
                 with col3:
-                    if 'TST_SpeedDem' in df.columns:
-                        max_speed = df['TST_SpeedDem'].max()
-                        st.metric("Max Speed", f"{max_speed} RPM")
-                with col4:
-                    if 'TST_APFlag' in df.columns:
-                        auto_steps = len(df[df['TST_APFlag'] == 1])
-                        st.metric("Auto Proceed Steps", auto_steps)
-                
-                # Display in technician-friendly format
-                st.subheader(f"Current {seal_type} Test Sequence")
-                st.dataframe(technician_df, use_container_width=True, height=500)
-                
-                # NEW: Download as Professional Excel button
-                st.subheader("💾 Download Current Test as Professional Excel")
-                
-                st.info(f"""
-                **Download this test sequence as a professionally formatted Excel file with:**
-                - 🎨 **Professional borders** and cell formatting
-                - 📋 **Real dropdown menus** for standardized inputs
-                - 🔵 **Colored headers** with white text
-                - 📐 **Centered alignment** for numbers
-                - 📝 **Instructions sheet** with guidance
-                - 💡 **Data validation** to prevent errors
-                """)
-                
-                # Create professional Excel file
-                excel_output = create_professional_excel_from_data(technician_df, detected_type)
-                
-                if excel_output:
-                    st.download_button(
-                        label="📥 Download as Professional Excel",
-                        data=excel_output.getvalue(),
-                        file_name=f"current_{detected_type}_test_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        help="Download this test sequence with professional Excel formatting"
-                    )
-        
-        except Exception as e:
-            st.error(f"❌ Could not load test sequence: {str(e)}")
-            st.info("Make sure the CSV file exists in the correct format.")
-
-if __name__ == "__main__":
-    main()
+                    if 'TST_SpeedDem'
