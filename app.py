@@ -139,7 +139,7 @@ def create_professional_template(file_type='main_seal'):
     
     # Create Excel file with xlsxwriter
     output = io.BytesIO()
-    with pd.ExcelWriter(output, engine='xlsxwriter', options={'nan_inf_to_errors': True}) as workbook:
+    with pd.ExcelWriter(output, engine='xlsxwriter') as workbook:
         # Create DataFrame and write to Excel
         df = pd.DataFrame(sample_data, columns=headers)
         df.to_excel(workbook, sheet_name='TEST_SEQUENCE', index=False)
@@ -313,7 +313,7 @@ def create_professional_excel_from_data(technician_df, file_type):
     
     output = io.BytesIO()
     
-    with pd.ExcelWriter(output, engine='xlsxwriter', options={'nan_inf_to_errors': True}) as workbook:
+    with pd.ExcelWriter(output, engine='xlsxwriter') as workbook:
         # Write main data sheet
         technician_df.to_excel(workbook, sheet_name='TEST_SEQUENCE', index=False)
         
@@ -601,17 +601,8 @@ def convert_to_readable_values(df, file_type):
 def safe_uploaded_csv_to_excel(uploaded_file):
     """Safely convert uploaded CSV to Excel format"""
     try:
-        # Read the uploaded CSV file
-        csv_content = uploaded_file.getvalue().decode('utf-8')
-        
-        # Use StringIO to read the CSV content
-        from io import StringIO
-        csv_string = StringIO(csv_content)
-        
-        # Read CSV and handle NaN/INF
-        df = pd.read_csv(csv_string, delimiter=';')
-        df = df.fillna(0)
-        df = df.replace([np.inf, -np.inf], 0)
+        # Use the safe reader to handle NaN/INF values
+        df = safe_read_csv(uploaded_file)
         
         # Convert to technician format
         result = machine_csv_to_excel(uploaded_file)
