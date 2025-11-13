@@ -770,4 +770,45 @@ def main():
                 st.success(f"✅ Loaded {seal_type} test sequence with {len(df)} steps")
                 
                 # Display metrics
-                col1, col2, col3, col4 = st.columns
+                col1, col2, col3, col4 = st.columns(4)
+                with col1:
+                    st.metric("Total Steps", len(df))
+                with col2:
+                    if 'TST_TempDemand' in df.columns:
+                        temp_min = df['TST_TempDemand'].min()
+                        temp_max = df['TST_TempDemand'].max()
+                        st.metric("Temperature Range", f"{temp_min}°C - {temp_max}°C")
+                with col3:
+                    if 'TST_SpeedDem' in df.columns:
+                        max_speed = df['TST_SpeedDem'].max()
+                        st.metric("Max Speed", f"{max_speed} RPM")
+                with col4:
+                    if 'TST_APFlag' in df.columns:
+                        auto_steps = len(df[df['TST_APFlag'] == 1])
+                        st.metric("Auto Proceed Steps", auto_steps)
+                
+                # Display in editable technician-friendly format
+                st.subheader(f"✏️ Editable {seal_type} Test Sequence")
+                edited_tech_df = editable_dataframe(technician_df, "current_test_preview", height=500)
+                
+                # Download as Professional Excel button
+                st.subheader("💾 Download Current Test as Professional Excel")
+                
+                # Create professional Excel file
+                excel_output = create_professional_excel_from_data(edited_tech_df, file_type)
+                
+                if excel_output:
+                    st.download_button(
+                        label="📥 Download as Professional Excel",
+                        data=excel_output.getvalue(),
+                        file_name=f"current_{file_type}_test_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        help="Download this test sequence with professional Excel formatting"
+                    )
+        
+        except Exception as e:
+            st.error(f"❌ Could not load test sequence: {str(e)}")
+            st.info("Make sure the CSV file exists in the correct format.")
+
+if __name__ == "__main__":
+    main()
