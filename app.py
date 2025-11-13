@@ -170,198 +170,32 @@ def get_column_mapping(file_type):
     else:
         return None
 
-def create_professional_template(file_type='main_seal'):
-    """Create a professionally formatted Excel template"""
-    
-    mapping = get_column_mapping(file_type)
-    if not mapping:
-        st.error("Unsupported file type")
-        return None
-    
-    headers = mapping['headers']
-    sample_data = mapping['sample_data']
-    
-    # Create Excel file with xlsxwriter
-    output = io.BytesIO()
-    with pd.ExcelWriter(output, engine='xlsxwriter') as workbook:
-        # Create DataFrame and write to Excel
-        df = pd.DataFrame(sample_data, columns=headers)
-        df.to_excel(workbook, sheet_name='TEST_SEQUENCE', index=False)
-        
-        # Get xlsxwriter workbook and worksheet objects
-        xlsx_workbook = workbook.book
-        xlsx_worksheet = workbook.sheets['TEST_SEQUENCE']
-        
-        # Define formats
-        header_format = xlsx_workbook.add_format({
-            'bold': True,
-            'text_wrap': True,
-            'valign': 'top',
-            'fg_color': '#366092',
-            'font_color': 'white',
-            'border': 1,
-            'align': 'center'
-        })
-        
-        cell_format = xlsx_workbook.add_format({
-            'border': 1,
-            'align': 'center',
-            'valign': 'vcenter'
-        })
-        
-        number_format = xlsx_workbook.add_format({
-            'border': 1,
-            'align': 'center',
-            'num_format': '0.00'
-        })
-        
-        notes_format = xlsx_workbook.add_format({
-            'border': 1,
-            'align': 'left',
-            'valign': 'vcenter'
-        })
-        
-        # Apply header formatting
-        for col_num, value in enumerate(headers):
-            xlsx_worksheet.write(0, col_num, value, header_format)
-        
-        # Apply cell formatting to data
-        for row_num in range(1, len(sample_data) + 1):
-            for col_num in range(len(headers)):
-                if headers[col_num] == 'Notes':
-                    xlsx_worksheet.write(row_num, col_num, sample_data[row_num-1][col_num], notes_format)
-                elif headers[col_num] in ['Step', 'Duration_s', 'Temperature_C']:
-                    xlsx_worksheet.write(row_num, col_num, sample_data[row_num-1][col_num], cell_format)
-                elif any(num in headers[col_num] for num in ['Speed', 'Pressure', 'Flow']):
-                    xlsx_worksheet.write(row_num, col_num, sample_data[row_num-1][col_num], number_format)
-                else:
-                    xlsx_worksheet.write(row_num, col_num, sample_data[row_num-1][col_num], cell_format)
-        
-        # Set column widths
-        column_widths = [8, 12, 18, 18, 18, 18, 20, 12, 12, 15, 12, 12, 12, 30]
-        for col_num, width in enumerate(column_widths[:len(headers)]):
-            xlsx_worksheet.set_column(col_num, col_num, width)
-        
-        # Add data validation for dropdowns
-        dropdown_columns = {
-            'Auto_Proceed': ['Yes', 'No'],
-            'Gas_Type': ['Air', 'N2', 'He'],
-            'Measurement': ['Yes', 'No'],
-            'Torque_Check': ['Yes', 'No']
-        }
-        
-        if file_type == 'main_seal':
-            dropdown_columns['Test_Mode'] = ['Mode 1', 'Mode 2']
-        
-        # Find column indices for dropdowns
-        col_indices = {col: headers.index(col) for col in dropdown_columns.keys() if col in headers}
-        
-        for col_name, col_idx in col_indices.items():
-            col_letter = chr(65 + col_idx)  # A, B, C, etc.
-            xlsx_worksheet.data_validation(f'{col_letter}2:{col_letter}100', {
-                'validate': 'list',
-                'source': dropdown_columns[col_name],
-                'error_title': 'Invalid Input',
-                'error_message': f'Please select from: {", ".join(dropdown_columns[col_name])}'
-            })
-        
-        # Create INSTRUCTIONS sheet
-        instructions_worksheet = xlsx_workbook.add_worksheet('INSTRUCTIONS')
-        
-        seal_type = "Main Seal" if file_type == 'main_seal' else "Separation Seal"
-        instructions = [
-            f"{seal_type.upper()} TEST SEQUENCE TEMPLATE - INSTRUCTIONS",
-            "",
-            "HOW TO USE THIS TEMPLATE:",
-            "1. Fill in the TEST_SEQUENCE sheet with your test parameters",
-            "2. Use dropdown menus for fields with limited options",
-            "3. Required fields: Step, Speed, Duration, Temperature",
-            "4. Save your completed file and upload back to the web app",
-            "5. Download the generated CSV for your control system",
-            "",
-            "FIELD DESCRIPTIONS:"
-        ]
-        
-        # Add field descriptions based on file type
-        field_descriptions = {
-            'main_seal': [
-                "Step: Sequential test step number (1, 2, 3...)",
-                "Speed_RPM: Rotational speed (0-3600 RPM)",
-                "Cell_Pressure_bar: Main chamber pressure (0.1-100 bar)",
-                "Interface_Pressure_bar: Interface pressure (0-40 bar)",
-                "BP_Drive_End_bar: Back pressure drive end (0-7 bar)",
-                "BP_Non_Drive_End_bar: Back pressure non-drive end (0-7 bar)",
-                "Gas_Injection_bar: Gas injection pressure (0-5 bar)",
-                "Duration_s: Step duration in seconds (1-300)",
-                "Auto_Proceed: Automatic step progression (Yes/No)",
-                "Temperature_C: Test temperature (30-155°C)",
-                "Gas_Type: Test gas type (Air/N2/He)",
-                "Test_Mode: Operating mode (Mode 1/Mode 2)",
-                "Measurement: Take measurements (Yes/No)",
-                "Torque_Check: Perform torque check (Yes/No)",
-                "Notes: Additional comments or observations"
-            ],
-            'separation_seal': [
-                "Step: Sequential test step number (1, 2, 3...)",
-                "Speed_RPM: Rotational speed (0-16550 RPM)",
-                "Sep_Seal_Flow_Set1: Separation seal flow setting 1 (0-100)",
-                "Sep_Seal_Flow_Set2: Separation seal flow setting 2 (0-100)",
-                "Sep_Seal_Pressure_Set1: Separation seal pressure setting 1 (0-1 bar)",
-                "Sep_Seal_Pressure_Set2: Separation seal pressure setting 2 (0-1 bar)",
-                "Sep_Seal_Control_Type: Control type (0=Pressure, 1=Flow)",
-                "Duration_s: Step duration in seconds (1-300)",
-                "Auto_Proceed: Automatic step progression (Yes/No)",
-                "Temperature_C: Test temperature (100°C)",
-                "Gas_Type: Test gas type (Air/N2/He)",
-                "Measurement: Take measurements (Yes/No)",
-                "Torque_Check: Perform torque check (Yes/No)",
-                "Notes: Additional comments or observations"
-            ]
-        }
-        
-        instructions.extend(field_descriptions[file_type])
-        
-        # Write instructions with formatting
-        title_format = xlsx_workbook.add_format({
-            'bold': True,
-            'font_size': 14,
-            'font_color': '#366092',
-            'valign': 'top'
-        })
-        
-        header_format_instructions = xlsx_workbook.add_format({
-            'bold': True,
-            'font_color': '#366092',
-            'valign': 'top'
-        })
-        
-        for row_num, instruction in enumerate(instructions):
-            if row_num == 0:
-                instructions_worksheet.write(row_num, 0, instruction, title_format)
-            elif "HOW TO USE" in instruction or "FIELD DESCRIPTIONS" in instruction:
-                instructions_worksheet.write(row_num, 0, instruction, header_format_instructions)
-            else:
-                instructions_worksheet.write(row_num, 0, instruction)
-        
-        instructions_worksheet.set_column('A:A', 60)
-    
-    output.seek(0)
-    return output
-
 def analyze_csv_file(uploaded_file):
     """Analyze and display detailed information about the CSV file"""
     
     st.header("🔍 CSV File Analysis")
     
+    # Show file info first
+    st.subheader("📁 Uploaded File Information")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("File Name", uploaded_file.name)
+    with col2:
+        st.metric("File Size", f"{len(uploaded_file.getvalue()) / 1024:.1f} KB")
+    with col3:
+        st.metric("File Type", "CSV")
+    
     # Read the file with safe reader
+    st.subheader("📊 Reading File Content...")
     df = safe_read_csv(uploaded_file)
     
     if df.empty:
         st.error("❌ Could not read the CSV file")
         return None, 'unknown'
     
-    # Display file information
-    col1, col2, col3 = st.columns(3)
+    # Display file structure information
+    st.subheader("📋 File Structure Analysis")
+    col1, col2, col3, col4 = st.columns(4)
     with col1:
         st.metric("Total Rows", len(df))
     with col2:
@@ -369,14 +203,33 @@ def analyze_csv_file(uploaded_file):
     with col3:
         file_type = detect_file_type(df)
         seal_type = "Main Seal" if file_type == 'main_seal' else "Separation Seal" if file_type == 'separation_seal' else "Unknown"
-        st.metric("File Type", seal_type)
+        st.metric("Detected Type", seal_type)
+    with col4:
+        st.metric("Data Points", len(df) * len(df.columns))
     
-    # Show raw data preview
-    st.subheader("📊 Raw Data Preview")
-    st.dataframe(df, use_container_width=True)
+    # Show raw data preview - THIS IS THE IMPORTANT PART
+    st.subheader("📄 Imported File Content (Raw Data)")
+    st.info("This is the exact content of your uploaded CSV file:")
     
-    # Show column information
-    st.subheader("📋 Column Details")
+    # Display the raw data
+    st.dataframe(df, use_container_width=True, height=300)
+    
+    # Show data summary
+    with st.expander("🔍 Detailed Data Summary", expanded=True):
+        st.write("**First 5 rows:**")
+        st.dataframe(df.head(), use_container_width=True)
+        
+        st.write("**Data Types:**")
+        dtype_df = pd.DataFrame({
+            'Column': df.columns,
+            'Data Type': df.dtypes,
+            'Non-Null Count': df.count(),
+            'Null Count': df.isnull().sum()
+        })
+        st.dataframe(dtype_df, use_container_width=True)
+    
+    # Show column information in detail
+    st.subheader("🗂️ Column Details")
     col_info = []
     for col in df.columns:
         col_info.append({
@@ -384,6 +237,7 @@ def analyze_csv_file(uploaded_file):
             'Data Type': str(df[col].dtype),
             'Non-Null Values': df[col].count(),
             'Null Values': df[col].isnull().sum(),
+            'Unique Values': df[col].nunique(),
             'Sample Values': str(df[col].head(3).tolist())
         })
     
@@ -405,7 +259,14 @@ def convert_machine_to_technician(df, file_type):
     
     # Rename columns
     machine_to_tech = mapping['machine_to_technician']
-    tech_df = tech_df.rename(columns=machine_to_tech)
+    
+    # Only rename columns that exist in the DataFrame
+    rename_dict = {}
+    for machine_col, tech_col in machine_to_tech.items():
+        if machine_col in tech_df.columns:
+            rename_dict[machine_col] = tech_col
+    
+    tech_df = tech_df.rename(columns=rename_dict)
     
     # Convert machine codes to readable values
     tech_df = convert_to_readable_values(tech_df, file_type)
@@ -454,7 +315,7 @@ def main():
     st.sidebar.title("🔧 Operations")
     operation = st.sidebar.radio(
         "Choose Operation:",
-        ["📥 Download Template", "🔍 Analyze & Convert CSV", "🔄 Excel to Machine CSV", "📤 Machine CSV to Excel", "👀 View Current Test"]
+        ["🔍 Analyze & Convert CSV", "📥 Download Template", "🔄 Excel to Machine CSV", "📤 Machine CSV to Excel", "👀 View Current Test"]
     )
     
     # Template type selection
@@ -466,38 +327,7 @@ def main():
     file_type_map = {"Main Seal": "main_seal", "Separation Seal": "separation_seal"}
     selected_file_type = file_type_map[template_type]
     
-    if operation == "📥 Download Template":
-        st.header(f"Download {template_type} Template")
-        
-        st.success(f"""
-        **🎯 This {template_type} template includes:**
-        - 🎨 **Professional borders** and cell formatting
-        - 📋 **Real dropdown menus** (no manual setup needed)
-        - 🔵 **Colored headers** with white text
-        - 📐 **Centered alignment** for numbers
-        - 📝 **Instructions sheet** with guidance
-        - 💡 **Data validation** to prevent errors
-        """)
-        
-        # Create and download template
-        excel_output = create_professional_template(selected_file_type)
-        
-        if excel_output:
-            st.download_button(
-                label=f"📥 Download {template_type} Template (.xlsx)",
-                data=excel_output.getvalue(),
-                file_name=f"{template_type.lower().replace(' ', '_')}_template_{datetime.now().strftime('%Y%m%d')}.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
-        
-        # Show template preview
-        mapping = get_column_mapping(selected_file_type)
-        if mapping:
-            st.subheader("📋 Template Preview")
-            preview_df = pd.DataFrame(mapping['sample_data'], columns=mapping['headers'])
-            st.dataframe(preview_df, use_container_width=True)
-    
-    elif operation == "🔍 Analyze & Convert CSV":
+    if operation == "🔍 Analyze & Convert CSV":
         st.header("Analyze & Convert CSV Files")
         st.info("""
         **This feature will:**
@@ -508,9 +338,9 @@ def main():
         - 💾 **Convert to technician-friendly format**
         """)
         
-        uploaded_file = st.file_uploader("Upload your CSV file", type=['csv'])
+        uploaded_file = st.file_uploader("Upload your CSV file", type=['csv'], key="csv_analyzer")
         
-        if uploaded_file:
+        if uploaded_file is not None:
             # Analyze the file
             df, file_type = analyze_csv_file(uploaded_file)
             
@@ -525,7 +355,18 @@ def main():
                     tech_df = convert_machine_to_technician(df, file_type)
                     
                     if tech_df is not None:
-                        st.dataframe(tech_df, use_container_width=True)
+                        st.success("✅ Successfully converted to technician-friendly format!")
+                        st.dataframe(tech_df, use_container_width=True, height=400)
+                        
+                        # Show conversion summary
+                        st.subheader("📈 Conversion Summary")
+                        col1, col2, col3 = st.columns(3)
+                        with col1:
+                            st.metric("Original Steps", len(df))
+                        with col2:
+                            st.metric("Converted Steps", len(tech_df))
+                        with col3:
+                            st.metric("Columns Added", len(tech_df.columns) - len(df.columns))
                         
                         # Download options
                         st.subheader("💾 Download Options")
@@ -539,7 +380,8 @@ def main():
                                 label="📥 Download as CSV",
                                 data=csv_data,
                                 file_name=f"converted_{file_type}_{datetime.now().strftime('%Y%m%d')}.csv",
-                                mime="text/csv"
+                                mime="text/csv",
+                                help="Download the converted data as CSV file"
                             )
                         
                         with col2:
@@ -553,24 +395,42 @@ def main():
                                 label="📥 Download as Excel",
                                 data=output.getvalue(),
                                 file_name=f"converted_{file_type}_{datetime.now().strftime('%Y%m%d')}.xlsx",
-                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                help="Download the converted data as Excel file"
                             )
                 
                 else:
                     st.warning("⚠️ Could not automatically detect file type. Showing raw data.")
                     st.dataframe(df, use_container_width=True)
+                    
+                    # Still offer download options for unknown files
+                    st.subheader("💾 Download Raw Data")
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        csv_data = df.to_csv(index=False, sep=';')
+                        st.download_button(
+                            label="📥 Download Raw CSV",
+                            data=csv_data,
+                            file_name=f"raw_data_{datetime.now().strftime('%Y%m%d')}.csv",
+                            mime="text/csv"
+                        )
     
+    elif operation == "📥 Download Template":
+        st.header(f"Download {template_type} Template")
+        # ... (keep your existing template download code)
+        
     elif operation == "🔄 Excel to Machine CSV":
         st.header("Convert Excel to Machine CSV")
-        # ... (keep your existing Excel to CSV code here)
+        # ... (keep your existing Excel to CSV code)
         
     elif operation == "📤 Machine CSV to Excel":
         st.header("Convert Machine CSV to Excel")
-        # ... (keep your existing CSV to Excel code here)
+        # ... (keep your existing CSV to Excel code)
         
     elif operation == "👀 View Current Test":
         st.header("Current Test Sequence")
-        # ... (keep your existing view current test code here)
+        # ... (keep your existing view current test code)
 
 if __name__ == "__main__":
     main()
