@@ -10,77 +10,197 @@ st.set_page_config(
     layout="wide"
 )
 
-def create_technician_template():
-    """Create an Excel template with dropdowns using pandas styling"""
+def create_professional_template():
+    """Create a professionally formatted Excel template with borders and dropdowns"""
     
-    # Create template with sample data
-    template_data = {
-        'Step': [1, 2, 3, 4, 5],
-        'Speed_RPM': [0, 0, 0, 3600, 0],
-        'Cell_Pressure_bar': [0.21, 0.4, 1.0, 10.0, 0],
-        'Interface_Pressure_bar': [0, 0, 0, 0, 0],
-        'BP_Drive_End_bar': [0, 0, 0, 1.0, 0],
-        'BP_Non_Drive_End_bar': [0, 0, 0, 1.0, 0],
-        'Gas_Injection_bar': [0, 0, 0, 0, 0],
-        'Duration_s': [2, 2, 2, 10, 1],
-        'Auto_Proceed': ['No', 'No', 'No', 'Yes', 'No'],
-        'Temperature_C': [30, 30, 30, 155, 155],
-        'Gas_Type': ['Air', 'Air', 'Air', 'Air', 'Air'],
-        'Test_Mode': ['Mode 1', 'Mode 1', 'Mode 1', 'Mode 1', 'Mode 1'],
-        'Measurement': ['Yes', 'Yes', 'Yes', 'Yes', 'No'],
-        'Torque_Check': ['No', 'No', 'No', 'No', 'No'],
-        'Notes': [
-            'Initial low pressure test',
-            'Pressure increase', 
-            'Medium pressure check',
-            'High speed operation',
-            'System cool down'
-        ]
-    }
+    # Create sample data
+    sample_data = [
+        [1, 0, 0.21, 0, 0, 0, 0, 2, 'No', 30, 'Air', 'Mode 1', 'Yes', 'No', 'Initial low pressure test'],
+        [2, 0, 0.4, 0, 0, 0, 0, 2, 'No', 30, 'Air', 'Mode 1', 'Yes', 'No', 'Pressure increase'],
+        [3, 0, 1.0, 0, 0, 0, 0, 2, 'No', 30, 'Air', 'Mode 1', 'Yes', 'No', 'Medium pressure check'],
+        [4, 3600, 10.0, 0, 1.0, 1.0, 0, 10, 'Yes', 155, 'Air', 'Mode 1', 'Yes', 'No', 'High speed operation'],
+        [5, 0, 0, 0, 0, 0, 0, 1, 'No', 155, 'Air', 'Mode 1', 'No', 'No', 'System cool down']
+    ]
     
-    df = pd.DataFrame(template_data)
+    headers = [
+        'Step', 'Speed_RPM', 'Cell_Pressure_bar', 'Interface_Pressure_bar',
+        'BP_Drive_End_bar', 'BP_Non_Drive_End_bar', 'Gas_Injection_bar',
+        'Duration_s', 'Auto_Proceed', 'Temperature_C', 'Gas_Type', 
+        'Test_Mode', 'Measurement', 'Torque_Check', 'Notes'
+    ]
     
-    return df
-
-def create_instructions_sheet():
-    """Create instructions as a separate DataFrame"""
-    instructions = {
-        'Instruction': [
-            'MAIN SEAL TEST SEQUENCE TEMPLATE - INSTRUCTIONS',
-            '',
-            'HOW TO USE THIS TEMPLATE:',
-            '1. Fill in the TEST_SEQUENCE sheet with your test parameters',
-            '2. Use the dropdown menus for standardized inputs',
-            '3. Required fields: Step, Speed, Cell Pressure, Duration, Temperature',
-            '4. Save your completed file and upload back to the web app',
-            '5. Download the generated CSV for your control system',
-            '',
-            'FIELD DESCRIPTIONS:',
-            'Step: Sequential test step number (1, 2, 3...)',
-            'Speed_RPM: Rotational speed (0 = stationary, 3600 = max speed)',
-            'Cell_Pressure_bar: Main chamber pressure (0.1 - 100 bar)',
-            'Interface_Pressure_bar: Interface pressure (0-40 bar)',
-            'BP_Drive_End_bar: Back pressure drive end (0-7 bar)',
-            'BP_Non_Drive_End_bar: Back pressure non-drive end (0-7 bar)',
-            'Gas_Injection_bar: Gas injection pressure (0-5 bar)',
-            'Duration_s: Step duration in seconds (1-300)',
-            'Auto_Proceed: Automatic step progression (Yes/No)',
-            'Temperature_C: Test temperature (30-155°C)',
-            'Gas_Type: Test gas type (Air/N2/He)',
-            'Test_Mode: Operating mode (Mode 1/Mode 2)',
-            'Measurement: Take measurements (Yes/No)',
-            'Torque_Check: Perform torque check (Yes/No)',
-            'Notes: Additional comments or observations'
-        ]
-    }
+    # Create Excel file with xlsxwriter
+    output = io.BytesIO()
+    workbook = pd.ExcelWriter(output, engine='xlsxwriter')
     
-    return pd.DataFrame(instructions)
+    # Create DataFrame and write to Excel
+    df = pd.DataFrame(sample_data, columns=headers)
+    df.to_excel(workbook, sheet_name='TEST_SEQUENCE', index=False)
+    
+    # Get workbook and worksheet objects
+    worksheet = workbook.sheets['TEST_SEQUENCE']
+    
+    # Get xlsxwriter workbook and worksheet objects
+    xlsx_workbook = workbook.book
+    xlsx_worksheet = workbook.sheets['TEST_SEQUENCE']
+    
+    # Define formats
+    header_format = xlsx_workbook.add_format({
+        'bold': True,
+        'text_wrap': True,
+        'valign': 'top',
+        'fg_color': '#366092',
+        'font_color': 'white',
+        'border': 1,
+        'align': 'center'
+    })
+    
+    cell_format = xlsx_workbook.add_format({
+        'border': 1,
+        'align': 'center',
+        'valign': 'vcenter'
+    })
+    
+    number_format = xlsx_workbook.add_format({
+        'border': 1,
+        'align': 'center',
+        'num_format': '0.00'
+    })
+    
+    notes_format = xlsx_workbook.add_format({
+        'border': 1,
+        'align': 'left',
+        'valign': 'vcenter'
+    })
+    
+    # Apply header formatting
+    for col_num, value in enumerate(headers):
+        xlsx_worksheet.write(0, col_num, value, header_format)
+    
+    # Apply cell formatting to data
+    for row_num in range(1, len(sample_data) + 1):
+        for col_num in range(len(headers)):
+            if headers[col_num] == 'Notes':
+                xlsx_worksheet.write(row_num, col_num, sample_data[row_num-1][col_num], notes_format)
+            elif headers[col_num] in ['Step', 'Duration_s', 'Temperature_C']:
+                xlsx_worksheet.write(row_num, col_num, sample_data[row_num-1][col_num], cell_format)
+            elif headers[col_num] in ['Speed_RPM', 'Cell_Pressure_bar', 'Interface_Pressure_bar', 
+                                    'BP_Drive_End_bar', 'BP_Non_Drive_End_bar', 'Gas_Injection_bar']:
+                xlsx_worksheet.write(row_num, col_num, sample_data[row_num-1][col_num], number_format)
+            else:
+                xlsx_worksheet.write(row_num, col_num, sample_data[row_num-1][col_num], cell_format)
+    
+    # Set column widths
+    column_widths = [8, 12, 18, 20, 18, 22, 18, 12, 12, 15, 12, 12, 12, 12, 30]
+    for col_num, width in enumerate(column_widths):
+        xlsx_worksheet.set_column(col_num, col_num, width)
+    
+    # Add data validation for dropdowns
+    # Auto_Proceed dropdown (Column I)
+    xlsx_worksheet.data_validation('I2:I100', {
+        'validate': 'list',
+        'source': ['Yes', 'No'],
+        'error_title': 'Invalid Input',
+        'error_message': 'Please select either Yes or No'
+    })
+    
+    # Gas_Type dropdown (Column K)
+    xlsx_worksheet.data_validation('K2:K100', {
+        'validate': 'list',
+        'source': ['Air', 'N2', 'He'],
+        'error_title': 'Invalid Input',
+        'error_message': 'Please select Air, N2, or He'
+    })
+    
+    # Test_Mode dropdown (Column L)
+    xlsx_worksheet.data_validation('L2:L100', {
+        'validate': 'list',
+        'source': ['Mode 1', 'Mode 2'],
+        'error_title': 'Invalid Input',
+        'error_message': 'Please select Mode 1 or Mode 2'
+    })
+    
+    # Measurement dropdown (Column M)
+    xlsx_worksheet.data_validation('M2:M100', {
+        'validate': 'list',
+        'source': ['Yes', 'No'],
+        'error_title': 'Invalid Input',
+        'error_message': 'Please select either Yes or No'
+    })
+    
+    # Torque_Check dropdown (Column N)
+    xlsx_worksheet.data_validation('N2:N100', {
+        'validate': 'list',
+        'source': ['Yes', 'No'],
+        'error_title': 'Invalid Input',
+        'error_message': 'Please select either Yes or No'
+    })
+    
+    # Create INSTRUCTIONS sheet
+    instructions_worksheet = xlsx_workbook.add_worksheet('INSTRUCTIONS')
+    
+    instructions = [
+        "MAIN SEAL TEST SEQUENCE TEMPLATE - INSTRUCTIONS",
+        "",
+        "HOW TO USE THIS TEMPLATE:",
+        "1. Fill in the TEST_SEQUENCE sheet with your test parameters",
+        "2. Use dropdown menus for fields with limited options (Auto Proceed, Gas Type, etc.)",
+        "3. Required fields: Step, Speed, Cell Pressure, Duration, Temperature",
+        "4. Save your completed file and upload back to the web app",
+        "5. Download the generated CSV for your control system",
+        "",
+        "FIELD DESCRIPTIONS:",
+        "Step: Sequential test step number (1, 2, 3...)",
+        "Speed_RPM: Rotational speed (0 = stationary, 3600 = max speed)",
+        "Cell_Pressure_bar: Main chamber pressure (0.1 - 100 bar)",
+        "Interface_Pressure_bar: Interface pressure (0-40 bar)",
+        "BP_Drive_End_bar: Back pressure drive end (0-7 bar)",
+        "BP_Non_Drive_End_bar: Back pressure non-drive end (0-7 bar)",
+        "Gas_Injection_bar: Gas injection pressure (0-5 bar)",
+        "Duration_s: Step duration in seconds (1-300)",
+        "Auto_Proceed: Automatic step progression (Yes/No)",
+        "Temperature_C: Test temperature (30-155°C)",
+        "Gas_Type: Test gas type (Air/N2/He)",
+        "Test_Mode: Operating mode (Mode 1/Mode 2)",
+        "Measurement: Take measurements (Yes/No)",
+        "Torque_Check: Perform torque check (Yes/No)",
+        "Notes: Additional comments or observations"
+    ]
+    
+    # Write instructions with formatting
+    title_format = xlsx_workbook.add_format({
+        'bold': True,
+        'font_size': 14,
+        'font_color': '#366092',
+        'valign': 'top'
+    })
+    
+    header_format_instructions = xlsx_workbook.add_format({
+        'bold': True,
+        'font_color': '#366092',
+        'valign': 'top'
+    })
+    
+    for row_num, instruction in enumerate(instructions):
+        if row_num == 0:
+            instructions_worksheet.write(row_num, 0, instruction, title_format)
+        elif "HOW TO USE" in instruction or "FIELD DESCRIPTIONS" in instruction:
+            instructions_worksheet.write(row_num, 0, instruction, header_format_instructions)
+        else:
+            instructions_worksheet.write(row_num, 0, instruction)
+    
+    instructions_worksheet.set_column('A:A', 60)
+    
+    workbook.close()
+    output.seek(0)
+    
+    return output
 
 def excel_to_machine_csv(excel_file):
     """Convert technician Excel to machine-readable CSV"""
     
     # Read Excel file
-    df = pd.read_excel(excel_file)
+    df = pd.read_excel(excel_file, sheet_name='TEST_SEQUENCE')
     
     # Remove empty rows
     df = df.dropna(subset=['Step']).reset_index(drop=True)
@@ -117,7 +237,7 @@ def excel_to_machine_csv(excel_file):
     return machine_df
 
 def machine_csv_to_excel(csv_file):
-    """Convert machine CSV to technician Excel format"""
+    """Convert machine CSV to formatted technician Excel"""
     
     # Read machine CSV
     df = pd.read_csv(csv_file, delimiter=';')
@@ -156,7 +276,7 @@ def machine_csv_to_excel(csv_file):
 
 def main():
     st.title("⚙️ Main Seal Test Sequence Manager")
-    st.markdown("### Professional Template System for Technicians")
+    st.markdown("### Professional Excel Template with Borders & Dropdowns")
     
     # Sidebar
     st.sidebar.title("🔧 Operations")
@@ -168,46 +288,57 @@ def main():
     if operation == "📥 Download Template":
         st.header("Download Professional Excel Template")
         
-        st.info("""
-        **🎯 Features of this template:**
-        - 📋 **Pre-formatted columns** with clear headers
-        - 📝 **Sample data** for guidance
-        - 🔄 **Easy conversion** to machine format
-        - 💡 **Built-in validation** through standardized formats
+        st.success("""
+        **🎯 This template includes:**
+        - 🎨 **Professional borders** and cell formatting
+        - 📋 **Real dropdown menus** (no manual setup needed)
+        - 🔵 **Colored headers** with white text
+        - 📐 **Centered alignment** for numbers
+        - 📝 **Instructions sheet** with guidance
+        - 💡 **Data validation** to prevent errors
         """)
         
-        # Create templates
-        template_df = create_technician_template()
-        instructions_df = create_instructions_sheet()
+        # Create and download template
+        excel_output = create_professional_template()
         
-        # Create Excel file with multiple sheets
-        with pd.ExcelWriter('technician_template.xlsx', engine='openpyxl') as writer:
-            instructions_df.to_excel(writer, sheet_name='INSTRUCTIONS', index=False)
-            template_df.to_excel(writer, sheet_name='TEST_SEQUENCE', index=False)
+        st.download_button(
+            label="📥 Download Professional Template (.xlsx)",
+            data=excel_output.getvalue(),
+            file_name=f"main_seal_template_{datetime.now().strftime('%Y%m%d')}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
         
-        with open('technician_template.xlsx', 'rb') as f:
-            st.download_button(
-                label="📥 Download Professional Template (.xlsx)",
-                data=f,
-                file_name=f"main_seal_template_{datetime.now().strftime('%Y%m%d')}.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
+        st.subheader("📋 Template Features Preview")
         
-        st.subheader("📋 Template Preview")
-        st.dataframe(template_df, use_container_width=True)
+        col1, col2 = st.columns(2)
         
-        st.subheader("📝 How to Use Dropdowns in Excel")
+        with col1:
+            st.markdown("""
+            **🎨 Formatting Features:**
+            - Blue headers with white text
+            - Black borders around all cells
+            - Centered text alignment
+            - Number formatting for values
+            - Optimized column widths
+            """)
+        
+        with col2:
+            st.markdown("""
+            **📋 Dropdown Menus:**
+            - Auto Proceed: Yes/No
+            - Gas Type: Air/N2/He  
+            - Test Mode: Mode 1/Mode 2
+            - Measurement: Yes/No
+            - Torque Check: Yes/No
+            
+            *Dropdowns work automatically in Excel!*
+            """)
+        
         st.markdown("""
-        **To add dropdown menus in Excel after downloading:**
-        1. Select the cells you want to have dropdowns
-        2. Go to **Data** → **Data Validation**
-        3. Choose **List** from Allow dropdown
-        4. Enter the options separated by commas:
-           - **Auto_Proceed**: `Yes,No`
-           - **Gas_Type**: `Air,N2,He`
-           - **Test_Mode**: `Mode 1,Mode 2`
-           - **Measurement**: `Yes,No`
-           - **Torque_Check**: `Yes,No`
+        **📁 Template Structure:**
+        - **INSTRUCTIONS sheet**: Detailed guide and field descriptions
+        - **TEST_SEQUENCE sheet**: Formatted data entry with sample data
+        - **Professional design**: Ready for technician use
         """)
     
     elif operation == "🔄 Excel to Machine CSV":
@@ -266,16 +397,47 @@ def main():
                 st.dataframe(technician_df, use_container_width=True)
                 
                 # Create Excel for download
-                with pd.ExcelWriter('technician_version.xlsx', engine='openpyxl') as writer:
+                output = io.BytesIO()
+                with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
                     technician_df.to_excel(writer, sheet_name='TEST_SEQUENCE', index=False)
+                    
+                    # Get workbook and add formatting
+                    workbook = writer.book
+                    worksheet = writer.sheets['TEST_SEQUENCE']
+                    
+                    # Add header formatting
+                    header_format = workbook.add_format({
+                        'bold': True,
+                        'text_wrap': True,
+                        'valign': 'top',
+                        'fg_color': '#366092',
+                        'font_color': 'white',
+                        'border': 1,
+                        'align': 'center'
+                    })
+                    
+                    cell_format = workbook.add_format({
+                        'border': 1,
+                        'align': 'center'
+                    })
+                    
+                    # Apply formatting
+                    for col_num, value in enumerate(technician_df.columns.values):
+                        worksheet.write(0, col_num, value, header_format)
+                    
+                    # Set column widths
+                    column_widths = [8, 12, 18, 20, 18, 22, 18, 12, 12, 15, 12, 12, 12, 12, 30]
+                    for col_num, width in enumerate(column_widths):
+                        worksheet.set_column(col_num, col_num, width)
                 
-                with open('technician_version.xlsx', 'rb') as f:
-                    st.download_button(
-                        label="📥 Download Technician Excel",
-                        data=f,
-                        file_name=f"technician_sequence_{datetime.now().strftime('%Y%m%d')}.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                    )
+                output.seek(0)
+                
+                st.download_button(
+                    label="📥 Download Formatted Excel",
+                    data=output.getvalue(),
+                    file_name=f"technician_sequence_{datetime.now().strftime('%Y%m%d')}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
                 
             except Exception as e:
                 st.error(f"❌ Error converting file: {str(e)}")
