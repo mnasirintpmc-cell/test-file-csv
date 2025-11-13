@@ -754,4 +754,46 @@ def main():
                         temp_max = df['TST_TempDemand'].max()
                         st.metric("Temperature Range", f"{temp_min}°C - {temp_max}°C")
                 with col3:
-                    if 'TST_SpeedDem'
+                    if 'TST_SpeedDem' in df.columns:
+                        max_speed = df['TST_SpeedDem'].max()
+                        st.metric("Max Speed", f"{max_speed} RPM")
+                with col4:
+                    if 'TST_APFlag' in df.columns:
+                        auto_steps = len(df[df['TST_APFlag'] == 1])
+                        st.metric("Auto Proceed Steps", auto_steps)
+                
+                # Display in technician-friendly format
+                st.subheader(f"Current {seal_type} Test Sequence")
+                st.dataframe(technician_df, use_container_width=True, height=500)
+                
+                # NEW: Download as Professional Excel button
+                st.subheader("💾 Download Current Test as Professional Excel")
+                
+                st.info(f"""
+                **Download this test sequence as a professionally formatted Excel file with:**
+                - 🎨 **Professional borders** and cell formatting
+                - 📋 **Real dropdown menus** for standardized inputs
+                - 🔵 **Colored headers** with white text
+                - 📐 **Centered alignment** for numbers
+                - 📝 **Instructions sheet** with guidance
+                - 💡 **Data validation** to prevent errors
+                """)
+                
+                # Create professional Excel file
+                excel_output = create_professional_excel_from_data(technician_df, detected_type)
+                
+                if excel_output:
+                    st.download_button(
+                        label="📥 Download as Professional Excel",
+                        data=excel_output.getvalue(),
+                        file_name=f"current_{detected_type}_test_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        help="Download this test sequence with professional Excel formatting"
+                    )
+        
+        except Exception as e:
+            st.error(f"❌ Could not load test sequence: {str(e)}")
+            st.info("Make sure the CSV file exists in the correct format.")
+
+if __name__ == "__main__":
+    main()
