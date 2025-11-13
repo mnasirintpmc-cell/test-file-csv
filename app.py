@@ -268,6 +268,185 @@ def create_professional_template(file_type='main_seal'):
     output.seek(0)
     return output
 
+def create_professional_excel_from_data(technician_df, file_type):
+    """Create a professionally formatted Excel file from existing test data"""
+    
+    mapping = get_column_mapping(file_type)
+    if not mapping:
+        return None
+    
+    output = io.BytesIO()
+    
+    with pd.ExcelWriter(output, engine='xlsxwriter') as workbook:
+        # Write main data sheet
+        technician_df.to_excel(workbook, sheet_name='TEST_SEQUENCE', index=False)
+        
+        # Get xlsxwriter objects
+        xlsx_workbook = workbook.book
+        xlsx_worksheet = workbook.sheets['TEST_SEQUENCE']
+        
+        # Define formats
+        header_format = xlsx_workbook.add_format({
+            'bold': True,
+            'text_wrap': True,
+            'valign': 'top',
+            'fg_color': '#366092',
+            'font_color': 'white',
+            'border': 1,
+            'align': 'center'
+        })
+        
+        cell_format = xlsx_workbook.add_format({
+            'border': 1,
+            'align': 'center',
+            'valign': 'vcenter'
+        })
+        
+        number_format = xlsx_workbook.add_format({
+            'border': 1,
+            'align': 'center',
+            'num_format': '0.00'
+        })
+        
+        notes_format = xlsx_workbook.add_format({
+            'border': 1,
+            'align': 'left',
+            'valign': 'vcenter'
+        })
+        
+        # Apply header formatting
+        for col_num, value in enumerate(technician_df.columns.values):
+            xlsx_worksheet.write(0, col_num, value, header_format)
+        
+        # Apply cell formatting to all data rows
+        for row_num in range(1, len(technician_df) + 1):
+            for col_num, col_name in enumerate(technician_df.columns):
+                value = technician_df.iloc[row_num-1, col_num]
+                
+                if col_name == 'Notes':
+                    xlsx_worksheet.write(row_num, col_num, value, notes_format)
+                elif col_name in ['Step', 'Duration_s', 'Temperature_C']:
+                    xlsx_worksheet.write(row_num, col_num, value, cell_format)
+                elif any(num_term in col_name for num_term in ['Speed', 'Pressure', 'Flow']):
+                    try:
+                        float_value = float(value)
+                        xlsx_worksheet.write(row_num, col_num, float_value, number_format)
+                    except (ValueError, TypeError):
+                        xlsx_worksheet.write(row_num, col_num, value, cell_format)
+                else:
+                    xlsx_worksheet.write(row_num, col_num, value, cell_format)
+        
+        # Set column widths
+        column_widths = [8, 12, 18, 18, 18, 18, 20, 12, 12, 15, 12, 12, 12, 30]
+        for col_num, width in enumerate(column_widths[:len(technician_df.columns)]):
+            xlsx_worksheet.set_column(col_num, col_num, width)
+        
+        # Add data validation for dropdowns
+        dropdown_columns = {
+            'Auto_Proceed': ['Yes', 'No'],
+            'Gas_Type': ['Air', 'N2', 'He'],
+            'Measurement': ['Yes', 'No'],
+            'Torque_Check': ['Yes', 'No']
+        }
+        
+        if file_type == 'main_seal':
+            dropdown_columns['Test_Mode'] = ['Mode 1', 'Mode 2']
+        
+        # Find column indices for dropdowns
+        col_indices = {col: list(technician_df.columns).index(col) for col in dropdown_columns.keys() if col in technician_df.columns}
+        
+        for col_name, col_idx in col_indices.items():
+            col_letter = chr(65 + col_idx)  # A, B, C, etc.
+            xlsx_worksheet.data_validation(f'{col_letter}2:{col_letter}{len(technician_df)+1}', {
+                'validate': 'list',
+                'source': dropdown_columns[col_name],
+                'error_title': 'Invalid Input',
+                'error_message': f'Please select from: {", ".join(dropdown_columns[col_name])}'
+            })
+        
+        # Create INSTRUCTIONS sheet
+        instructions_worksheet = xlsx_workbook.add_worksheet('INSTRUCTIONS')
+        
+        seal_type = "Main Seal" if file_type == 'main_seal' else "Separation Seal"
+        instructions = [
+            f"{seal_type.upper()} TEST SEQUENCE - EXPORTED {datetime.now().strftime('%Y-%m-%d')}",
+            "",
+            "HOW TO USE THIS FILE:",
+            "1. This file contains your current test sequence in professional format",
+            "2. All cells have proper borders and formatting",
+            "3. Dropdown menus are included for standardized inputs",
+            "4. You can edit this file and upload it back to the web app",
+            "5. Use the conversion tool to generate machine CSV files",
+            "",
+            "FIELD DESCRIPTIONS:"
+        ]
+        
+        # Add field descriptions based on file type
+        field_descriptions = {
+            'main_seal': [
+                "Step: Sequential test step number (1, 2, 3...)",
+                "Speed_RPM: Rotational speed (0-3600 RPM)",
+                "Cell_Pressure_bar: Main chamber pressure (0.1-100 bar)",
+                "Interface_Pressure_bar: Interface pressure (0-40 bar)",
+                "BP_Drive_End_bar: Back pressure drive end (0-7 bar)",
+                "BP_Non_Drive_End_bar: Back pressure non-drive end (0-7 bar)",
+                "Gas_Injection_bar: Gas injection pressure (0-5 bar)",
+                "Duration_s: Step duration in seconds (1-300)",
+                "Auto_Proceed: Automatic step progression (Yes/No)",
+                "Temperature_C: Test temperature (30-155°C)",
+                "Gas_Type: Test gas type (Air/N2/He)",
+                "Test_Mode: Operating mode (Mode 1/Mode 2)",
+                "Measurement: Take measurements (Yes/No)",
+                "Torque_Check: Perform torque check (Yes/No)",
+                "Notes: Additional comments or observations"
+            ],
+            'separation_seal': [
+                "Step: Sequential test step number (1, 2, 3...)",
+                "Speed_RPM: Rotational speed (0-16550 RPM)",
+                "Sep_Seal_Flow_Set1: Separation seal flow setting 1 (0-100)",
+                "Sep_Seal_Flow_Set2: Separation seal flow setting 2 (0-100)",
+                "Sep_Seal_Pressure_Set1: Separation seal pressure setting 1 (0-1 bar)",
+                "Sep_Seal_Pressure_Set2: Separation seal pressure setting 2 (0-1 bar)",
+                "Sep_Seal_Control_Type: Control type (0=Pressure, 1=Flow)",
+                "Duration_s: Step duration in seconds (1-300)",
+                "Auto_Proceed: Automatic step progression (Yes/No)",
+                "Temperature_C: Test temperature (100°C)",
+                "Gas_Type: Test gas type (Air/N2/He)",
+                "Measurement: Take measurements (Yes/No)",
+                "Torque_Check: Perform torque check (Yes/No)",
+                "Notes: Additional comments or observations"
+            ]
+        }
+        
+        instructions.extend(field_descriptions[file_type])
+        
+        # Write instructions with formatting
+        title_format = xlsx_workbook.add_format({
+            'bold': True,
+            'font_size': 14,
+            'font_color': '#366092',
+            'valign': 'top'
+        })
+        
+        header_format_instructions = xlsx_workbook.add_format({
+            'bold': True,
+            'font_color': '#366092',
+            'valign': 'top'
+        })
+        
+        for row_num, instruction in enumerate(instructions):
+            if row_num == 0:
+                instructions_worksheet.write(row_num, 0, instruction, title_format)
+            elif "HOW TO USE" in instruction or "FIELD DESCRIPTIONS" in instruction:
+                instructions_worksheet.write(row_num, 0, instruction, header_format_instructions)
+            else:
+                instructions_worksheet.write(row_num, 0, instruction)
+        
+        instructions_worksheet.set_column('A:A', 60)
+    
+    output.seek(0)
+    return output
+
 def excel_to_machine_csv(excel_file):
     """Convert technician Excel to machine-readable CSV"""
     
@@ -473,38 +652,16 @@ def main():
                     st.subheader("Converted Data Preview")
                     st.dataframe(technician_df, use_container_width=True)
                     
-                    # Create Excel for download
-                    output = io.BytesIO()
-                    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-                        technician_df.to_excel(writer, sheet_name='TEST_SEQUENCE', index=False)
-                        
-                        # Get workbook and add basic formatting
-                        workbook = writer.book
-                        worksheet = writer.sheets['TEST_SEQUENCE']
-                        
-                        # Add header formatting
-                        header_format = workbook.add_format({
-                            'bold': True,
-                            'text_wrap': True,
-                            'valign': 'top',
-                            'fg_color': '#366092',
-                            'font_color': 'white',
-                            'border': 1,
-                            'align': 'center'
-                        })
-                        
-                        # Apply header formatting
-                        for col_num, value in enumerate(technician_df.columns.values):
-                            worksheet.write(0, col_num, value, header_format)
+                    # Create professional Excel for download
+                    excel_output = create_professional_excel_from_data(technician_df, detected_type)
                     
-                    output.seek(0)
-                    
-                    st.download_button(
-                        label="📥 Download Formatted Excel",
-                        data=output.getvalue(),
-                        file_name=f"{detected_type}_sequence_{datetime.now().strftime('%Y%m%d')}.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                    )
+                    if excel_output:
+                        st.download_button(
+                            label="📥 Download Professional Excel",
+                            data=excel_output.getvalue(),
+                            file_name=f"{detected_type}_professional_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                        )
                 
             except Exception as e:
                 st.error(f"❌ Error converting file: {str(e)}")
@@ -549,6 +706,31 @@ def main():
                 # Display in technician-friendly format
                 st.subheader(f"Current {seal_type} Test Sequence")
                 st.dataframe(technician_df, use_container_width=True, height=500)
+                
+                # NEW: Download as Professional Excel button
+                st.subheader("💾 Download Current Test as Professional Excel")
+                
+                st.info(f"""
+                **Download this test sequence as a professionally formatted Excel file with:**
+                - 🎨 **Professional borders** and cell formatting
+                - 📋 **Real dropdown menus** for standardized inputs
+                - 🔵 **Colored headers** with white text
+                - 📐 **Centered alignment** for numbers
+                - 📝 **Instructions sheet** with guidance
+                - 💡 **Data validation** to prevent errors
+                """)
+                
+                # Create professional Excel file
+                excel_output = create_professional_excel_from_data(technician_df, detected_type)
+                
+                if excel_output:
+                    st.download_button(
+                        label="📥 Download as Professional Excel",
+                        data=excel_output.getvalue(),
+                        file_name=f"current_{detected_type}_test_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        help="Download this test sequence with professional Excel formatting"
+                    )
         
         except Exception as e:
             st.error(f"❌ Could not load test sequence: {str(e)}")
