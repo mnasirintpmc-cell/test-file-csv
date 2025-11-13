@@ -601,15 +601,42 @@ def convert_to_readable_values(df, file_type):
 def safe_uploaded_csv_to_excel(uploaded_file):
     """Safely convert uploaded CSV to Excel format"""
     try:
-        # Use the safe reader to handle NaN/INF values
-        df = safe_read_csv(uploaded_file)
+        # Reset file pointer to beginning
+        uploaded_file.seek(0)
+        
+        # Read the CSV content directly
+        csv_content = uploaded_file.read().decode('utf-8')
+        
+        # Use StringIO to read the CSV content
+        from io import StringIO
+        csv_string = StringIO(csv_content)
+        
+        # Read CSV and handle NaN/INF
+        df = pd.read_csv(csv_string, delimiter=';')
+        df = df.fillna(0)
+        df = df.replace([np.inf, -np.inf], 0)
+        
+        # Detect file type
+        file_type = detect_file_type(df)
+        mapping = get_column_mapping(file_type)
+        
+        if not mapping:
+            st.error("Unsupported CSV format")
+            return None
         
         # Convert to technician format
-        result = machine_csv_to_excel(uploaded_file)
-        if result:
-            technician_df, detected_type = result
-            return create_professional_excel_from_data(technician_df, detected_type)
-        return None
+        machine_to_tech = mapping['machine_to_technician']
+        df = df.rename(columns=machine_to_tech)
+        
+        # Convert machine codes to readable values
+        df = convert_to_readable_values(df, file_type)
+        
+        # Add Step numbers and Notes column
+        df.insert(0, 'Step', range(1, len(df) + 1))
+        df['Notes'] = ''
+        
+        # Create professional Excel
+        return create_professional_excel_from_data(df, file_type)
         
     except Exception as e:
         st.error(f"Error processing uploaded CSV: {str(e)}")
@@ -740,6 +767,8 @@ def main():
                             file_name=f"{detected_type}_professional_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
                             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                         )
+                else:
+                    st.error("❌ Failed to convert CSV file")
                 
             except Exception as e:
                 st.error(f"❌ Error converting file: {str(e)}")
