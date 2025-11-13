@@ -2,7 +2,8 @@ import streamlit as st
 import pandas as pd
 import io
 from datetime import datetime
-import numpy as np  # ADD THIS IMPORT
+import numpy as np
+from template_utils import create_smart_template, create_example_sequence, safe_read_csv
 
 # Configure the page
 st.set_page_config(
@@ -556,13 +557,8 @@ def convert_to_machine_codes(df, file_type):
 def machine_csv_to_excel(csv_file):
     """Convert machine CSV to formatted technician Excel"""
     
-    # Read machine CSV
-    df = pd.read_csv(csv_file, delimiter=';')
-    
-    # ⬇️⬇️ ADD THE FIX RIGHT HERE - Clean NaN/INF values ⬇️⬇️
-    df = df.fillna(0)  # Replace NaN with 0
-    df = df.replace([np.inf, -np.inf], 0)  # Replace INF with 0
-    # ⬆️⬆️ ADD THE FIX RIGHT HERE ⬆️⬆️
+    # Read machine CSV using safe reader
+    df = safe_read_csv(csv_file)
     
     # Detect file type
     file_type = detect_file_type(df)
@@ -741,9 +737,66 @@ def main():
         )
         
         try:
-            df = pd.read_csv(current_file, delimiter=';')
+            # Use safe reader to handle NaN/INF values
+            df = safe_read_csv(current_file)
+            result = machine_csv_to_excel(current_file)
             
-            # ⬇️⬇️ ADD THE FIX HERE TOO - Clean NaN/INF values ⬇️⬇️
-            df = df.fillna(0)  # Replace NaN with 0
-            df = df.replace([np.inf, -np.inf], 0)  # Replace INF with 0
-            # ⬆️⬆️ ADD THE FIX HERE TOO ⬆️
+            if result:
+                technician_df, detected_type = result
+                seal_type = "Main Seal" if detected_type == 'main_seal' else "Separation Seal"
+                
+                st.success(f"✅ Loaded {seal_type} test sequence with {len(df)} steps")
+                
+                # Display metrics
+                col1, col2, col3, col4 = st.columns(4)
+                with col1:
+                    st.metric("Total Steps", len(df))
+                with col2:
+                    if 'TST_TempDemand' in df.columns:
+                        temp_min = df['TST_TempDemand'].min()
+                        temp_max = df['TST_TempDemand'].max()
+                        st.metric("Temperature Range", f"{temp_min}°C - {temp_max}°C")
+                with col3:
+                    if 'TST_SpeedDem' in df.columns:
+                        max_speed = df['TST_SpeedDem'].max()
+                        st.metric("Max Speed", f"{max_speed} RPM")
+                with col4:
+                    if 'TST_APFlag' in df.columns:
+                        auto_steps = len(df[df['TST_APFlag'] == 1])
+                        st.metric("Auto Proceed Steps", auto_steps)
+                
+                # Display in technician-friendly format
+                st.subheader(f"Current {seal_type} Test Sequence")
+                st.dataframe(technician_df, use_container_width=True, height=500)
+                
+                # NEW: Download as Professional Excel button
+                st.subheader("💾 Download Current Test as Professional Excel")
+                
+                st.info(f"""
+                **Download this test sequence as a professionally formatted Excel file with:**
+                - 🎨 **Professional borders** and cell formatting
+                - 📋 **Real dropdown menus** for standardized inputs
+                - 🔵 **Colored headers** with white text
+                - 📐 **Centered alignment** for numbers
+                - 📝 **Instructions sheet** with guidance
+                - 💡 **Data validation** to prevent errors
+                """)
+                
+                # Create professional Excel file
+                excel_output = create_professional_excel_from_data(technician_df, detected_type)
+                
+                if excel_output:
+                    st.download_button(
+                        label="📥 Download as Professional Excel",
+                        data=excel_output.getvalue(),
+                        file_name=f"current_{detected_type}_test_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        help="Download this test sequence with professional Excel formatting"
+                    )
+        
+        except Exception as e:
+            st.error(f"❌ Could not load test sequence: {str(e)}")
+            st.info("Make sure the CSV file exists in the correct format.")
+
+if __name__ == "__main__":
+    main()
