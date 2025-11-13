@@ -41,7 +41,13 @@ def create_example_sequence():
 
 def safe_read_csv(csv_file):
     """Safely read CSV files handling NaN/INF values"""
-    df = pd.read_csv(csv_file, delimiter=';')
+    # Handle both file paths and uploaded files
+    if hasattr(csv_file, 'read'):
+        # It's an uploaded file
+        df = pd.read_csv(csv_file, delimiter=';')
+    else:
+        # It's a file path
+        df = pd.read_csv(csv_file, delimiter=';')
     
     # FIX FOR NAN/INF ERROR
     df = df.fillna(0)  # Replace NaN with 0
