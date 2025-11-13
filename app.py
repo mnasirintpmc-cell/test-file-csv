@@ -488,7 +488,7 @@ def convert_to_readable_values(df, file_type):
 
 def main():
     st.title("⚙️ Universal Seal Test Manager")
-    st.markdown("### Enhanced with NaN/INF Handling & File Analysis")
+    st.markdown("### File Analysis")
     
     # Sidebar
     st.sidebar.title("🔧 Operations")
@@ -511,9 +511,9 @@ def main():
         
         st.success(f"""
         **🎯 This {template_type} template includes:**
-        - 🎨 **Professional borders** and cell formatting
+        - 🎨 **borders** and cell formatting
         - 📋 **Real dropdown menus** (no manual setup needed)
-        - 🔵 **Colored headers** with white text
+        - 🔵 **headers** with white text
         - 📐 **Centered alignment** for numbers
         - 📝 **Instructions sheet** with guidance
         - 💡 **Data validation** to prevent errors
@@ -663,7 +663,7 @@ def main():
                             
                             # Create Excel for download
                             st.subheader("💾 Download Excel")
-                            excel_output = create_professional_excel_from_data(technician_df, file_type)
+                            excel_output = create_excel_from_data(technician_df, file_type)
                             
                             if excel_output:
                                 st.download_button(
