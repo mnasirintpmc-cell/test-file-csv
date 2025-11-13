@@ -139,7 +139,7 @@ def create_professional_template(file_type='main_seal'):
     
     # Create Excel file with xlsxwriter
     output = io.BytesIO()
-    with pd.ExcelWriter(output, engine='xlsxwriter', options={'nan_inf_to_errors': True}) as workbook:
+    with pd.ExcelWriter(output, engine='xlsxwriter') as workbook:
         # Create DataFrame and write to Excel
         df = pd.DataFrame(sample_data, columns=headers)
         df.to_excel(workbook, sheet_name='TEST_SEQUENCE', index=False)
@@ -313,7 +313,7 @@ def create_professional_excel_from_data(technician_df, file_type):
     
     output = io.BytesIO()
     
-    with pd.ExcelWriter(output, engine='xlsxwriter', options={'nan_inf_to_errors': True}) as workbook:
+    with pd.ExcelWriter(output, engine='xlsxwriter') as workbook:
         # Write main data sheet
         technician_df.to_excel(workbook, sheet_name='TEST_SEQUENCE', index=False)
         
@@ -635,7 +635,7 @@ def safe_uploaded_csv_to_excel(uploaded_file):
         df.insert(0, 'Step', range(1, len(df) + 1))
         df['Notes'] = ''
         
-        # Create professional Excel with proper error handling
+        # Create professional Excel
         return create_professional_excel_from_data(df, file_type)
         
     except Exception as e:
