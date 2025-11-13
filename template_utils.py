@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 
 def create_smart_template():
     """Create Excel-friendly template"""
@@ -37,3 +38,13 @@ def create_example_sequence():
         'TST_TorqueCheck': [0, 0, 0, 0, 0, 0]
     }
     return pd.DataFrame(example_sequence)
+
+def safe_read_csv(csv_file):
+    """Safely read CSV files handling NaN/INF values"""
+    df = pd.read_csv(csv_file, delimiter=';')
+    
+    # FIX FOR NAN/INF ERROR
+    df = df.fillna(0)  # Replace NaN with 0
+    df = df.replace([np.inf, -np.inf], 0)  # Replace INF with 0
+    
+    return df
