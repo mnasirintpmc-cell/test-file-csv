@@ -139,7 +139,7 @@ def create_professional_template(file_type='main_seal'):
     
     # Create Excel file with xlsxwriter
     output = io.BytesIO()
-    with pd.ExcelWriter(output, engine='xlsxwriter') as workbook:
+    with pd.ExcelWriter(output, engine='xlsxwriter', options={'nan_inf_to_errors': True}) as workbook:
         # Create DataFrame and write to Excel
         df = pd.DataFrame(sample_data, columns=headers)
         df.to_excel(workbook, sheet_name='TEST_SEQUENCE', index=False)
@@ -313,7 +313,7 @@ def create_professional_excel_from_data(technician_df, file_type):
     
     output = io.BytesIO()
     
-    with pd.ExcelWriter(output, engine='xlsxwriter') as workbook:
+    with pd.ExcelWriter(output, engine='xlsxwriter', options={'nan_inf_to_errors': True}) as workbook:
         # Write main data sheet
         technician_df.to_excel(workbook, sheet_name='TEST_SEQUENCE', index=False)
         
@@ -598,6 +598,32 @@ def convert_to_readable_values(df, file_type):
     
     return df
 
+def safe_uploaded_csv_to_excel(uploaded_file):
+    """Safely convert uploaded CSV to Excel format"""
+    try:
+        # Read the uploaded CSV file
+        csv_content = uploaded_file.getvalue().decode('utf-8')
+        
+        # Use StringIO to read the CSV content
+        from io import StringIO
+        csv_string = StringIO(csv_content)
+        
+        # Read CSV and handle NaN/INF
+        df = pd.read_csv(csv_string, delimiter=';')
+        df = df.fillna(0)
+        df = df.replace([np.inf, -np.inf], 0)
+        
+        # Convert to technician format
+        result = machine_csv_to_excel(uploaded_file)
+        if result:
+            technician_df, detected_type = result
+            return create_professional_excel_from_data(technician_df, detected_type)
+        return None
+        
+    except Exception as e:
+        st.error(f"Error processing uploaded CSV: {str(e)}")
+        return None
+
 def main():
     st.title("⚙️ Universal Seal Test Manager")
     st.markdown("### Supports Main Seal & Separation Seal Tests")
@@ -701,22 +727,22 @@ def main():
         
         if uploaded_file:
             try:
-                # Convert to technician format
-                result = machine_csv_to_excel(uploaded_file)
-                if result:
-                    technician_df, detected_type = result
-                    
-                    seal_type = "Main Seal" if detected_type == 'main_seal' else "Separation Seal"
-                    st.success(f"✅ Successfully converted {len(technician_df)} {seal_type} test steps!")
-                    
-                    # Preview
-                    st.subheader("Converted Data Preview")
-                    st.dataframe(technician_df, use_container_width=True)
-                    
-                    # Create professional Excel for download
-                    excel_output = create_professional_excel_from_data(technician_df, detected_type)
-                    
-                    if excel_output:
+                # Use the safe conversion function for uploaded files
+                excel_output = safe_uploaded_csv_to_excel(uploaded_file)
+                
+                if excel_output:
+                    # Also show preview
+                    result = machine_csv_to_excel(uploaded_file)
+                    if result:
+                        technician_df, detected_type = result
+                        seal_type = "Main Seal" if detected_type == 'main_seal' else "Separation Seal"
+                        st.success(f"✅ Successfully converted {len(technician_df)} {seal_type} test steps!")
+                        
+                        # Preview
+                        st.subheader("Converted Data Preview")
+                        st.dataframe(technician_df, use_container_width=True)
+                        
+                        # Download professional Excel
                         st.download_button(
                             label="📥 Download Professional Excel",
                             data=excel_output.getvalue(),
@@ -769,7 +795,7 @@ def main():
                 st.subheader(f"Current {seal_type} Test Sequence")
                 st.dataframe(technician_df, use_container_width=True, height=500)
                 
-                # NEW: Download as Professional Excel button
+                # Download as Professional Excel button
                 st.subheader("💾 Download Current Test as Professional Excel")
                 
                 st.info(f"""
