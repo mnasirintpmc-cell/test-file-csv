@@ -598,50 +598,6 @@ def convert_to_readable_values(df, file_type):
     
     return df
 
-def safe_uploaded_csv_to_excel(uploaded_file):
-    """Safely convert uploaded CSV to Excel format"""
-    try:
-        # Reset file pointer to beginning
-        uploaded_file.seek(0)
-        
-        # Read the CSV content directly
-        csv_content = uploaded_file.read().decode('utf-8')
-        
-        # Use StringIO to read the CSV content
-        from io import StringIO
-        csv_string = StringIO(csv_content)
-        
-        # Read CSV and handle NaN/INF
-        df = pd.read_csv(csv_string, delimiter=';')
-        df = df.fillna(0)
-        df = df.replace([np.inf, -np.inf], 0)
-        
-        # Detect file type
-        file_type = detect_file_type(df)
-        mapping = get_column_mapping(file_type)
-        
-        if not mapping:
-            st.error("Unsupported CSV format")
-            return None
-        
-        # Convert to technician format
-        machine_to_tech = mapping['machine_to_technician']
-        df = df.rename(columns=machine_to_tech)
-        
-        # Convert machine codes to readable values
-        df = convert_to_readable_values(df, file_type)
-        
-        # Add Step numbers and Notes column
-        df.insert(0, 'Step', range(1, len(df) + 1))
-        df['Notes'] = ''
-        
-        # Create professional Excel
-        return create_professional_excel_from_data(df, file_type)
-        
-    except Exception as e:
-        st.error(f"Error processing uploaded CSV: {str(e)}")
-        return None
-
 def main():
     st.title("⚙️ Universal Seal Test Manager")
     st.markdown("### Supports Main Seal & Separation Seal Tests")
@@ -745,30 +701,28 @@ def main():
         
         if uploaded_file:
             try:
-                # Use the safe conversion function for uploaded files
-                excel_output = safe_uploaded_csv_to_excel(uploaded_file)
-                
-                if excel_output:
-                    # Also show preview
-                    result = machine_csv_to_excel(uploaded_file)
-                    if result:
-                        technician_df, detected_type = result
-                        seal_type = "Main Seal" if detected_type == 'main_seal' else "Separation Seal"
-                        st.success(f"✅ Successfully converted {len(technician_df)} {seal_type} test steps!")
-                        
-                        # Preview
-                        st.subheader("Converted Data Preview")
-                        st.dataframe(technician_df, use_container_width=True)
-                        
-                        # Download professional Excel
+                # Convert to technician format
+                result = machine_csv_to_excel(uploaded_file)
+                if result:
+                    technician_df, detected_type = result
+                    
+                    seal_type = "Main Seal" if detected_type == 'main_seal' else "Separation Seal"
+                    st.success(f"✅ Successfully converted {len(technician_df)} {seal_type} test steps!")
+                    
+                    # Preview
+                    st.subheader("Converted Data Preview")
+                    st.dataframe(technician_df, use_container_width=True)
+                    
+                    # Create professional Excel for download
+                    excel_output = create_professional_excel_from_data(technician_df, detected_type)
+                    
+                    if excel_output:
                         st.download_button(
                             label="📥 Download Professional Excel",
                             data=excel_output.getvalue(),
                             file_name=f"{detected_type}_professional_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
                             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                         )
-                else:
-                    st.error("❌ Failed to convert CSV file")
                 
             except Exception as e:
                 st.error(f"❌ Error converting file: {str(e)}")
@@ -815,7 +769,7 @@ def main():
                 st.subheader(f"Current {seal_type} Test Sequence")
                 st.dataframe(technician_df, use_container_width=True, height=500)
                 
-                # Download as Professional Excel button
+                # NEW: Download as Professional Excel button
                 st.subheader("💾 Download Current Test as Professional Excel")
                 
                 st.info(f"""
