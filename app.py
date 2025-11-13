@@ -486,6 +486,72 @@ def convert_to_readable_values(df, file_type):
     
     return df
 
+def editable_dataframe(df, key, height=400):
+    """Create an editable dataframe with session state persistence"""
+    
+    # Initialize session state for this dataframe if not exists
+    if key not in st.session_state:
+        st.session_state[key] = df.copy()
+    
+    # Display editable dataframe
+    st.info("✏️ **Editable Table**: Click on any cell to edit. Changes are saved automatically.")
+    
+    # Use st.data_editor for editable table
+    edited_df = st.data_editor(
+        st.session_state[key],
+        key=f"editor_{key}",
+        use_container_width=True,
+        height=height,
+        num_rows="dynamic"  # Allow adding/deleting rows
+    )
+    
+    # Update session state with changes
+    st.session_state[key] = edited_df
+    
+    # Show action buttons
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        if st.button("🔄 Reset to Original", key=f"reset_{key}"):
+            st.session_state[key] = df.copy()
+            st.rerun()
+    
+    with col2:
+        if st.button("➕ Add New Row", key=f"add_{key}"):
+            new_row = {col: '' for col in st.session_state[key].columns}
+            st.session_state[key] = pd.concat([st.session_state[key], pd.DataFrame([new_row])], ignore_index=True)
+            st.rerun()
+    
+    with col3:
+        if st.button("💾 Save Changes", key=f"save_{key}"):
+            st.success("✅ Changes saved successfully!")
+    
+    return edited_df
+
+def convert_to_machine_codes(df, file_type):
+    """Convert readable values to machine codes"""
+    
+    # Common conversions
+    if 'TST_APFlag' in df.columns:
+        df['TST_APFlag'] = df['TST_APFlag'].map({'Yes': 1, 'No': 0, 'YES': 1, 'NO': 0})
+        # Fill any NaN values with 0
+        df['TST_APFlag'] = df['TST_APFlag'].fillna(0)
+    
+    if 'TST_MeasurementReq' in df.columns:
+        df['TST_MeasurementReq'] = df['TST_MeasurementReq'].map({'Yes': 1, 'No': 0, 'YES': 1, 'NO': 0})
+        df['TST_MeasurementReq'] = df['TST_MeasurementReq'].fillna(0)
+    
+    if 'TST_TorqueCheck' in df.columns:
+        df['TST_TorqueCheck'] = df['TST_TorqueCheck'].map({'Yes': 1, 'No': 0, 'YES': 1, 'NO': 0})
+        df['TST_TorqueCheck'] = df['TST_TorqueCheck'].fillna(0)
+    
+    # Type-specific conversions
+    if file_type == 'main_seal' and 'TST_TestMode' in df.columns:
+        df['TST_TestMode'] = df['TST_TestMode'].map({'Mode 1': 1, 'Mode 2': 2, 'MODE 1': 1, 'MODE 2': 2})
+        df['TST_TestMode'] = df['TST_TestMode'].fillna(1)
+    
+    return df
+
 def main():
     st.title("⚙️ Universal Seal Test Manager")
     st.markdown("### Enhanced with NaN/INF Handling & File Analysis")
@@ -562,25 +628,29 @@ def main():
                     st.error("Unsupported file format. Please use the provided templates.")
                     return None
                 
+                # Show editable preview
+                st.subheader("✏️ Editable Data Preview")
+                edited_df = editable_dataframe(df, "excel_preview")
+                
                 # DEBUG: Show what columns we have
-                st.info(f"📊 Found columns: {list(df.columns)}")
+                st.info(f"📊 Found columns: {list(edited_df.columns)}")
                 
                 # Rename columns - only rename the ones that exist
-                existing_columns = df.columns.tolist()
+                existing_columns = edited_df.columns.tolist()
                 rename_dict = {}
                 
                 for tech_col, machine_col in mapping['technician_to_machine'].items():
                     if tech_col in existing_columns:
                         rename_dict[tech_col] = machine_col
                 
-                df = df.rename(columns=rename_dict)
+                machine_df = edited_df.rename(columns=rename_dict)
                 
                 # Convert readable values back to machine codes
-                df = convert_to_machine_codes(df, file_type)
+                machine_df = convert_to_machine_codes(machine_df, file_type)
                 
                 # Remove Step and Notes columns for machine CSV (if they exist)
                 columns_to_drop = ['Step', 'Notes']
-                machine_df = df.drop([col for col in columns_to_drop if col in df.columns], axis=1)
+                machine_df = machine_df.drop([col for col in columns_to_drop if col in machine_df.columns], axis=1)
                 
                 # DEBUG: Show final columns
                 st.info(f"🔧 Final machine columns: {list(machine_df.columns)}")
@@ -588,7 +658,7 @@ def main():
                 seal_type = "Main Seal" if file_type == 'main_seal' else "Separation Seal"
                 st.success(f"✅ Successfully converted {len(machine_df)} {seal_type} test steps!")
                 
-                # Preview
+                # Preview final machine format
                 st.subheader("Machine CSV Preview")
                 st.dataframe(machine_df, use_container_width=True)
                 
@@ -648,22 +718,22 @@ def main():
                         if technician_df is not None:
                             st.success(f"✅ Successfully converted {len(technician_df)} {seal_type} test steps!")
                             
-                            # Preview converted data
-                            st.subheader("Converted Data Preview")
-                            st.dataframe(technician_df, use_container_width=True)
+                            # Show editable preview of converted data
+                            st.subheader("✏️ Editable Converted Data")
+                            edited_tech_df = editable_dataframe(technician_df, "csv_preview")
                             
                             # Show conversion summary
                             col1, col2, col3 = st.columns(3)
                             with col1:
                                 st.metric("Original Steps", len(df))
                             with col2:
-                                st.metric("Converted Steps", len(technician_df))
+                                st.metric("Converted Steps", len(edited_tech_df))
                             with col3:
                                 st.metric("File Type", seal_type)
                             
                             # Create professional Excel for download
                             st.subheader("💾 Download Professional Excel")
-                            excel_output = create_professional_excel_from_data(technician_df, file_type)
+                            excel_output = create_professional_excel_from_data(edited_tech_df, file_type)
                             
                             if excel_output:
                                 st.download_button(
@@ -700,69 +770,4 @@ def main():
                 st.success(f"✅ Loaded {seal_type} test sequence with {len(df)} steps")
                 
                 # Display metrics
-                col1, col2, col3, col4 = st.columns(4)
-                with col1:
-                    st.metric("Total Steps", len(df))
-                with col2:
-                    if 'TST_TempDemand' in df.columns:
-                        temp_min = df['TST_TempDemand'].min()
-                        temp_max = df['TST_TempDemand'].max()
-                        st.metric("Temperature Range", f"{temp_min}°C - {temp_max}°C")
-                with col3:
-                    if 'TST_SpeedDem' in df.columns:
-                        max_speed = df['TST_SpeedDem'].max()
-                        st.metric("Max Speed", f"{max_speed} RPM")
-                with col4:
-                    if 'TST_APFlag' in df.columns:
-                        auto_steps = len(df[df['TST_APFlag'] == 1])
-                        st.metric("Auto Proceed Steps", auto_steps)
-                
-                # Display in technician-friendly format
-                st.subheader(f"Current {seal_type} Test Sequence")
-                st.dataframe(technician_df, use_container_width=True, height=500)
-                
-                # Download as Professional Excel button
-                st.subheader("💾 Download Current Test as Professional Excel")
-                
-                # Create professional Excel file
-                excel_output = create_professional_excel_from_data(technician_df, file_type)
-                
-                if excel_output:
-                    st.download_button(
-                        label="📥 Download as Professional Excel",
-                        data=excel_output.getvalue(),
-                        file_name=f"current_{file_type}_test_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        help="Download this test sequence with professional Excel formatting"
-                    )
-        
-        except Exception as e:
-            st.error(f"❌ Could not load test sequence: {str(e)}")
-            st.info("Make sure the CSV file exists in the correct format.")
-
-def convert_to_machine_codes(df, file_type):
-    """Convert readable values to machine codes"""
-    
-    # Common conversions
-    if 'TST_APFlag' in df.columns:
-        df['TST_APFlag'] = df['TST_APFlag'].map({'Yes': 1, 'No': 0, 'YES': 1, 'NO': 0})
-        # Fill any NaN values with 0
-        df['TST_APFlag'] = df['TST_APFlag'].fillna(0)
-    
-    if 'TST_MeasurementReq' in df.columns:
-        df['TST_MeasurementReq'] = df['TST_MeasurementReq'].map({'Yes': 1, 'No': 0, 'YES': 1, 'NO': 0})
-        df['TST_MeasurementReq'] = df['TST_MeasurementReq'].fillna(0)
-    
-    if 'TST_TorqueCheck' in df.columns:
-        df['TST_TorqueCheck'] = df['TST_TorqueCheck'].map({'Yes': 1, 'No': 0, 'YES': 1, 'NO': 0})
-        df['TST_TorqueCheck'] = df['TST_TorqueCheck'].fillna(0)
-    
-    # Type-specific conversions
-    if file_type == 'main_seal' and 'TST_TestMode' in df.columns:
-        df['TST_TestMode'] = df['TST_TestMode'].map({'Mode 1': 1, 'Mode 2': 2, 'MODE 1': 1, 'MODE 2': 2})
-        df['TST_TestMode'] = df['TST_TestMode'].fillna(1)
-    
-    return df
-
-if __name__ == "__main__":
-    main()
+                col1, col2, col3, col4 = st.columns
