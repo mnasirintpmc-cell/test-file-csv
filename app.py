@@ -2,6 +2,11 @@ import streamlit as st
 import pandas as pd
 import io
 from datetime import datetime
+from openpyxl import Workbook
+from openpyxl.styles import Font, PatternFill, Border, Side, Alignment
+from openpyxl.worksheet.data_validation import DataValidation
+import tempfile
+import os
 
 # Configure the page
 st.set_page_config(
@@ -10,53 +15,186 @@ st.set_page_config(
     layout="wide"
 )
 
-def create_technician_template():
-    """Create an Excel template that's easy for technicians to edit"""
+def create_styled_excel_template():
+    """Create a beautifully formatted Excel template with dropdowns and styling"""
     
-    # Define the template structure with descriptions
-    template_data = {
-        'Step': ['Enter step number (1,2,3...)'],
-        'Speed_RPM': ['Rotational speed in RPM (0 for stationary)'],
-        'Cell_Pressure_bar': ['Main cell pressure in bar'],
-        'Interface_Pressure_bar': ['Interface pressure in bar'],
-        'BP_Drive_End_bar': ['Back pressure - drive end in bar'],
-        'BP_Non_Drive_End_bar': ['Back pressure - non-drive end in bar'],
-        'Gas_Injection_bar': ['Gas injection pressure in bar'],
-        'Duration_s': ['Step duration in seconds'],
-        'Auto_Proceed': ['Auto proceed? (Yes/No)'],
-        'Temperature_C': ['Temperature in Celsius'],
-        'Gas_Type': ['Gas type (Air/N2/He...)'],
-        'Test_Mode': ['Test mode (Mode 1/Mode 2)'],
-        'Measurement': ['Take measurement? (Yes/No)'],
-        'Torque_Check': ['Torque check? (Yes/No)'],
-        'Notes': ['Optional notes for technician']
-    }
+    # Create workbook
+    wb = Workbook()
     
-    # Create template DataFrame
-    template_df = pd.DataFrame(template_data)
+    # Remove default sheet and create our formatted sheets
+    wb.remove(wb.active)
     
-    # Add example rows
-    example_rows = [
-        [1, 0, 0.21, 0, 0, 0, 0, 2, 'No', 30, 'Air', 'Mode 1', 'Yes', 'No', 'Initial low pressure'],
-        [2, 0, 0.4, 0, 0, 0, 0, 2, 'No', 30, 'Air', 'Mode 1', 'Yes', 'No', 'Pressure increase'],
-        [3, 0, 1.0, 0, 0, 0, 0, 2, 'No', 30, 'Air', 'Mode 1', 'Yes', 'No', 'Medium pressure'],
-        [4, 3600, 10, 0, 1, 1, 0, 10, 'Yes', 155, 'Air', 'Mode 1', 'Yes', 'No', 'High speed test'],
-        [5, 0, 0, 0, 0, 0, 0, 1, 'No', 155, 'Air', 'Mode 1', 'No', 'No', 'Cool down']
+    # Create Instructions sheet
+    ws_instructions = wb.create_sheet("INSTRUCTIONS")
+    
+    # Instruction content
+    instructions = [
+        ["MAIN SEAL TEST SEQUENCE TEMPLATE - INSTRUCTIONS"],
+        [""],
+        ["HOW TO USE THIS TEMPLATE:"],
+        ["1. Fill in the TEST_SEQUENCE sheet with your test parameters"],
+        ["2. Use dropdown menus for fields with limited options (Yes/No, Mode, Gas Type)"],
+        ["3. Required fields: Step, Speed, Cell Pressure, Duration, Temperature"],
+        ["4. Save your completed file and upload back to the web app"],
+        ["5. Download the generated CSV for your control system"],
+        [""],
+        ["FIELD DESCRIPTIONS:"],
+        ["Step: Sequential test step number (1, 2, 3...)"],
+        ["Speed_RPM: Rotational speed (0 = stationary, 3600 = max speed)"],
+        ["Cell_Pressure_bar: Main chamber pressure (0.1 - 100 bar)"],
+        ["Interface_Pressure_bar: Interface pressure (0-40 bar)"],
+        ["BP_Drive_End_bar: Back pressure drive end (0-7 bar)"],
+        ["BP_Non_Drive_End_bar: Back pressure non-drive end (0-7 bar)"],
+        ["Gas_Injection_bar: Gas injection pressure (0-5 bar)"],
+        ["Duration_s: Step duration in seconds (1-300)"],
+        ["Auto_Proceed: Automatic step progression (Yes/No)"],
+        ["Temperature_C: Test temperature (30-155°C)"],
+        ["Gas_Type: Test gas type (Air/N2/He)"],
+        ["Test_Mode: Operating mode (Mode 1/Mode 2)"],
+        ["Measurement: Take measurements (Yes/No)"],
+        ["Torque_Check: Perform torque check (Yes/No)"],
+        ["Notes: Additional comments or observations"]
     ]
     
-    example_df = pd.DataFrame(example_rows, columns=template_df.columns)
+    # Add instructions to sheet
+    for row_idx, instruction in enumerate(instructions, 1):
+        ws_instructions.cell(row=row_idx, column=1, value=instruction[0])
     
-    return template_df, example_df
+    # Style instructions sheet
+    title_font = Font(size=14, bold=True, color="FFFFFF")
+    title_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
+    header_font = Font(size=12, bold=True, color="FFFFFF")
+    header_fill = PatternFill(start_color="4F81BD", end_color="4F81BD", fill_type="solid")
+    
+    ws_instructions.cell(1, 1).font = title_font
+    ws_instructions.cell(1, 1).fill = title_fill
+    
+    for row in range(3, 25):
+        if ws_instructions.cell(row, 1).value and ":" in ws_instructions.cell(row, 1).value:
+            ws_instructions.cell(row, 1).font = header_font
+            ws_instructions.cell(row, 1).fill = header_fill
+    
+    # Create main data sheet
+    ws_data = wb.create_sheet("TEST_SEQUENCE")
+    
+    # Define headers with descriptions
+    headers = [
+        "Step", "Speed_RPM", "Cell_Pressure_bar", "Interface_Pressure_bar",
+        "BP_Drive_End_bar", "BP_Non_Drive_End_bar", "Gas_Injection_bar",
+        "Duration_s", "Auto_Proceed", "Temperature_C", "Gas_Type", 
+        "Test_Mode", "Measurement", "Torque_Check", "Notes"
+    ]
+    
+    # Add headers
+    for col_idx, header in enumerate(headers, 1):
+        cell = ws_data.cell(row=1, column=col_idx, value=header)
+        cell.font = Font(bold=True, color="FFFFFF")
+        cell.fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
+        cell.alignment = Alignment(horizontal="center")
+    
+    # Add sample data
+    sample_data = [
+        [1, 0, 0.21, 0, 0, 0, 0, 2, "No", 30, "Air", "Mode 1", "Yes", "No", "Initial low pressure test"],
+        [2, 0, 0.4, 0, 0, 0, 0, 2, "No", 30, "Air", "Mode 1", "Yes", "No", "Pressure increase"],
+        [3, 0, 1.0, 0, 0, 0, 0, 2, "No", 30, "Air", "Mode 1", "Yes", "No", "Medium pressure check"],
+        [4, 3600, 10.0, 0, 1.0, 1.0, 0, 10, "Yes", 155, "Air", "Mode 1", "Yes", "No", "High speed operation"],
+        [5, 0, 0, 0, 0, 0, 0, 1, "No", 155, "Air", "Mode 1", "No", "No", "System cool down"]
+    ]
+    
+    for row_idx, row_data in enumerate(sample_data, 2):
+        for col_idx, value in enumerate(row_data, 1):
+            cell = ws_data.cell(row=row_idx, column=col_idx, value=value)
+    
+    # Apply styling to data
+    thin_border = Border(
+        left=Side(style='thin'),
+        right=Side(style='thin'),
+        top=Side(style='thin'),
+        bottom=Side(style='thin')
+    )
+    
+    # Apply borders and alignment to all cells
+    for row in ws_data.iter_rows(min_row=1, max_row=len(sample_data)+1, max_col=len(headers)):
+        for cell in row:
+            cell.border = thin_border
+            if cell.row == 1:  # Header row
+                cell.alignment = Alignment(horizontal="center", vertical="center")
+            else:
+                cell.alignment = Alignment(horizontal="center", vertical="center")
+    
+    # Add data validation for dropdowns
+    # Auto_Proceed dropdown
+    auto_proceed_dv = DataValidation(
+        type="list", 
+        formula1='"Yes,No"',
+        allow_blank=False
+    )
+    ws_data.add_data_validation(auto_proceed_dv)
+    auto_proceed_dv.add(f'I2:I100')
+    
+    # Gas_Type dropdown
+    gas_type_dv = DataValidation(
+        type="list",
+        formula1='"Air,N2,He"',
+        allow_blank=False
+    )
+    ws_data.add_data_validation(gas_type_dv)
+    gas_type_dv.add(f'K2:K100')
+    
+    # Test_Mode dropdown
+    test_mode_dv = DataValidation(
+        type="list",
+        formula1='"Mode 1,Mode 2"',
+        allow_blank=False
+    )
+    ws_data.add_data_validation(test_mode_dv)
+    test_mode_dv.add(f'L2:L100')
+    
+    # Measurement dropdown
+    measurement_dv = DataValidation(
+        type="list",
+        formula1='"Yes,No"',
+        allow_blank=False
+    )
+    ws_data.add_data_validation(measurement_dv)
+    measurement_dv.add(f'M2:M100')
+    
+    # Torque_Check dropdown
+    torque_dv = DataValidation(
+        type="list",
+        formula1='"Yes,No"',
+        allow_blank=False
+    )
+    ws_data.add_data_validation(torque_dv)
+    torque_dv.add(f'N2:N100')
+    
+    # Set column widths
+    column_widths = [8, 12, 18, 20, 18, 22, 18, 12, 12, 15, 12, 12, 12, 12, 30]
+    for col_idx, width in enumerate(column_widths, 1):
+        ws_data.column_dimensions[chr(64 + col_idx)].width = width
+    
+    # Add conditional formatting for important fields
+    # Highlight speed changes
+    for row in range(2, len(sample_data) + 2):
+        speed_cell = ws_data.cell(row=row, column=2)  # Speed column
+        if speed_cell.value and speed_cell.value > 0:
+            speed_cell.fill = PatternFill(start_color="FFF2CC", end_color="FFF2CC", fill_type="solid")
+        
+        # Highlight auto-proceed steps
+        auto_cell = ws_data.cell(row=row, column=9)  # Auto Proceed column
+        if auto_cell.value == "Yes":
+            auto_cell.fill = PatternFill(start_color="E2F0D9", end_color="E2F0D9", fill_type="solid")
+    
+    return wb
 
 def excel_to_machine_csv(excel_file):
     """Convert technician Excel to machine-readable CSV"""
     
-    # Read Excel file
-    df = pd.read_excel(excel_file)
+    # Read Excel file (use TEST_SEQUENCE sheet)
+    df = pd.read_excel(excel_file, sheet_name='TEST_SEQUENCE')
     
-    # Remove template row if present
-    if 'Enter step number' in str(df.iloc[0]['Step']):
-        df = df.iloc[1:].reset_index(drop=True)
+    # Remove empty rows
+    df = df.dropna(subset=['Step']).reset_index(drop=True)
     
     # Convert back to machine format
     machine_mapping = {
@@ -90,7 +228,7 @@ def excel_to_machine_csv(excel_file):
     return machine_df
 
 def machine_csv_to_excel(csv_file):
-    """Convert machine CSV to technician Excel format"""
+    """Convert machine CSV to formatted technician Excel"""
     
     # Read machine CSV
     df = pd.read_csv(csv_file, delimiter=';')
@@ -129,7 +267,7 @@ def machine_csv_to_excel(csv_file):
 
 def main():
     st.title("⚙️ Main Seal Test Sequence Manager")
-    st.markdown("### Bridge between Technicians and Machine Control System")
+    st.markdown("### Professional Template System for Technicians")
     
     # Sidebar
     st.sidebar.title("🔧 Operations")
@@ -139,38 +277,66 @@ def main():
     )
     
     if operation == "📥 Download Template":
-        st.header("Download Technician Template")
-        
-        template_df, example_df = create_technician_template()
+        st.header("Download Professional Excel Template")
         
         st.info("""
-        **Instructions:**
-        1. Download the template below
-        2. Edit in Excel (add your test steps)
-        3. Save your completed test sequence
-        4. Upload back here to generate machine CSV
+        **🎯 Features of this template:**
+        - 🎨 **Professional formatting** with colored headers and borders
+        - 📋 **Dropdown menus** for standardized inputs
+        - 📝 **Built-in instructions** and examples
+        - 🎯 **Data validation** to prevent errors
+        - 💡 **Conditional formatting** for important values
         """)
         
-        # Create downloadable template
-        with pd.ExcelWriter('technician_template.xlsx', engine='openpyxl') as writer:
-            # Template sheet with instructions
-            template_df.to_excel(writer, sheet_name='TEMPLATE_INSTRUCTIONS', index=False)
-            # Example sheet
-            example_df.to_excel(writer, sheet_name='EXAMPLE_TEST', index=False)
+        # Create and download template
+        wb = create_styled_excel_template()
         
-        with open('technician_template.xlsx', 'rb') as f:
+        # Save to temporary file
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx') as tmp:
+            wb.save(tmp.name)
+            tmp_path = tmp.name
+        
+        with open(tmp_path, 'rb') as f:
             st.download_button(
-                label="📥 Download Technician Template (.xlsx)",
+                label="📥 Download Professional Template (.xlsx)",
                 data=f,
-                file_name=f"test_sequence_template_{datetime.now().strftime('%Y%m%d')}.xlsx",
+                file_name=f"main_seal_template_{datetime.now().strftime('%Y%m%d')}.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
         
-        st.subheader("Template Preview")
-        st.dataframe(template_df, use_container_width=True)
+        # Clean up
+        os.unlink(tmp_path)
         
-        st.subheader("Example Test Sequence")
-        st.dataframe(example_df, use_container_width=True)
+        st.subheader("🎨 Template Features Preview")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("""
+            **📋 Dropdown Selections:**
+            - Auto Proceed: Yes/No
+            - Gas Type: Air/N2/He  
+            - Test Mode: Mode 1/Mode 2
+            - Measurement: Yes/No
+            - Torque Check: Yes/No
+            """)
+        
+        with col2:
+            st.markdown("""
+            **🎯 Visual Highlights:**
+            - Blue headers with white text
+            - Clear cell borders
+            - Yellow highlight for speed > 0
+            - Green highlight for auto-proceed steps
+            - Centered text alignment
+            """)
+        
+        st.markdown("""
+        **📁 Template Structure:**
+        - **INSTRUCTIONS** sheet: Detailed guide and field descriptions
+        - **TEST_SEQUENCE** sheet: Main data entry with formatting
+        - **Sample data** included for reference
+        """)
     
     elif operation == "🔄 Excel to Machine CSV":
         st.header("Convert Excel to Machine CSV")
@@ -188,6 +354,14 @@ def main():
                 st.subheader("Machine CSV Preview")
                 st.dataframe(machine_df, use_container_width=True)
                 
+                # Show conversion summary
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.metric("Total Steps", len(machine_df))
+                with col2:
+                    st.metric("Auto Proceed Steps", 
+                             len(machine_df[machine_df['TST_APFlag'] == 1]))
+                
                 # Download machine CSV
                 csv_data = machine_df.to_csv(index=False, sep=';')
                 st.download_button(
@@ -199,6 +373,7 @@ def main():
                 
             except Exception as e:
                 st.error(f"❌ Error converting file: {str(e)}")
+                st.info("Make sure you're using the provided template format.")
     
     elif operation == "📤 Machine CSV to Excel":
         st.header("Convert Machine CSV to Excel")
@@ -213,20 +388,39 @@ def main():
                 st.success(f"✅ Successfully converted {len(technician_df)} test steps!")
                 
                 # Preview
-                st.subheader("Technician Excel Preview")
+                st.subheader("Converted Data Preview")
                 st.dataframe(technician_df, use_container_width=True)
                 
-                # Download technician Excel
-                with pd.ExcelWriter('technician_version.xlsx', engine='openpyxl') as writer:
-                    technician_df.to_excel(writer, sheet_name='TEST_SEQUENCE', index=False)
+                # Create formatted Excel for download
+                wb = Workbook()
+                ws = wb.active
+                ws.title = "TEST_SEQUENCE"
                 
-                with open('technician_version.xlsx', 'rb') as f:
+                # Add headers with basic formatting
+                for col_idx, column in enumerate(technician_df.columns, 1):
+                    cell = ws.cell(row=1, column=col_idx, value=column)
+                    cell.font = Font(bold=True)
+                
+                # Add data
+                for row_idx, row in technician_df.iterrows():
+                    for col_idx, value in enumerate(row, 1):
+                        ws.cell(row=row_idx+2, column=col_idx, value=value)
+                
+                # Save to temporary file
+                with tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx') as tmp:
+                    wb.save(tmp.name)
+                    tmp_path = tmp.name
+                
+                with open(tmp_path, 'rb') as f:
                     st.download_button(
                         label="📥 Download Technician Excel",
                         data=f,
                         file_name=f"technician_sequence_{datetime.now().strftime('%Y%m%d')}.xlsx",
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                     )
+                
+                # Clean up
+                os.unlink(tmp_path)
                 
             except Exception as e:
                 st.error(f"❌ Error converting file: {str(e)}")
@@ -250,10 +444,10 @@ def main():
             with col3:
                 st.metric("Max Speed", f"{df['TST_SpeedDem'].max()} RPM")
             with col4:
-                st.metric("Total Duration", f"{df['TST_StepDuration'].sum()}s")
+                st.metric("Auto Proceed Steps", len(df[df['TST_APFlag'] == 1]))
             
             # Display in technician-friendly format
-            st.subheader("Current Test Sequence (Technician View)")
+            st.subheader("Current Test Sequence")
             st.dataframe(technician_df, use_container_width=True, height=500)
             
         except Exception as e:
