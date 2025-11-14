@@ -6,7 +6,7 @@ import numpy as np
 import math
 
 def safe_read_csv(file_path_or_buffer):
-    """Safely read CSV files with NaN/INF value handling and proper encoding"""
+    """ read CSV files """
     try:
         # Try reading with different encodings and delimiters
         encodings = ['utf-8', 'latin-1', 'cp1252', 'iso-8859-1']
@@ -171,7 +171,7 @@ def get_column_mapping(file_type):
         return None
 
 def create_professional_excel_from_data(technician_df, file_type):
-    """Create a professionally formatted Excel file from existing test data"""
+    """Create a formatted Excel file from existing test data"""
     
     mapping = get_column_mapping(file_type)
     if not mapping:
@@ -274,7 +274,7 @@ def create_professional_excel_from_data(technician_df, file_type):
             f"{seal_type.upper()} TEST SEQUENCE - EXPORTED {datetime.now().strftime('%Y-%m-%d')}",
             "",
             "HOW TO USE THIS FILE:",
-            "1. This file contains your current test sequence in professional format",
+            "1. This file contains your current test sequence ",
             "2. All cells have proper borders and formatting",
             "3. Dropdown menus are included for standardized inputs",
             "4. You can edit this file and upload it back to the web app",
@@ -426,7 +426,7 @@ def analyze_csv_file(uploaded_file):
     return df, file_type
 
 def convert_machine_to_technician(df, file_type):
-    """Convert machine CSV to technician-friendly format"""
+    """Convert machine CSV to technician format"""
     
     mapping = get_column_mapping(file_type)
     if not mapping:
@@ -554,7 +554,7 @@ def convert_to_machine_codes(df, file_type):
 
 def main():
     st.title("⚙️ Universal Seal Test Manager")
-    st.markdown("### Enhanced with NaN/INF Handling & File Analysis")
+    st.markdown("### File Analysis")
     
     # Sidebar
     st.sidebar.title("🔧 Operations")
@@ -577,9 +577,9 @@ def main():
         
         st.success(f"""
         **🎯 This {template_type} template includes:**
-        - 🎨 **Professional borders** and cell formatting
+        - 🎨 **borders** and cell formatting
         - 📋 **Real dropdown menus** (no manual setup needed)
-        - 🔵 **Colored headers** with white text
+        - 🔵 **headers** with white text
         - 📐 **Centered alignment** for numbers
         - 📝 **Instructions sheet** with guidance
         - 💡 **Data validation** to prevent errors
@@ -696,7 +696,7 @@ def main():
         - 🛡️ **Handle NaN/INF** values automatically  
         - 🔄 **Detect file type** (Main Seal or Separation Seal)
         - 📊 **Show detailed information** about your data
-        - 💾 **Convert to professional Excel format**
+        - 💾 **Convert to Excel format**
         """)
         
         uploaded_file = st.file_uploader("Upload machine CSV file", type=['csv'])
@@ -803,7 +803,7 @@ def main():
                         data=excel_output.getvalue(),
                         file_name=f"current_{file_type}_test_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        help="Download this test sequence with professional Excel formatting"
+                        help="Download this test sequence with Excel formatting"
                     )
         
         except Exception as e:
