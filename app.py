@@ -732,12 +732,12 @@ def main():
                                 st.metric("File Type", seal_type)
                             
                             # Create professional Excel for download
-                            st.subheader("💾 Download Professional Excel")
+                            st.subheader("💾 Download Excel")
                             excel_output = create_professional_excel_from_data(edited_tech_df, file_type)
                             
                             if excel_output:
                                 st.download_button(
-                                    label="📥 Download Professional Excel",
+                                    label="📥 Download Excel",
                                     data=excel_output.getvalue(),
                                     file_name=f"{file_type}_professional_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
                                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -792,14 +792,14 @@ def main():
                 edited_tech_df = editable_dataframe(technician_df, "current_test_preview", height=500)
                 
                 # Download as Professional Excel button
-                st.subheader("💾 Download Current Test as Professional Excel")
+                st.subheader("💾 Download Current Test as Excel")
                 
                 # Create professional Excel file
                 excel_output = create_professional_excel_from_data(edited_tech_df, file_type)
                 
                 if excel_output:
                     st.download_button(
-                        label="📥 Download as Professional Excel",
+                        label="📥 Download as Excel",
                         data=excel_output.getvalue(),
                         file_name=f"current_{file_type}_test_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
