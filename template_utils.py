@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 
 def create_smart_template():
-    """Create Excel-friendly template"""
+    """Create Excel template"""
     smart_template = {
         'TST_SpeedDem': ['SET_SPEED'],
         'TST_CellPresDemand': ['SET_PRESSURE'],
@@ -40,7 +40,7 @@ def create_example_sequence():
     return pd.DataFrame(example_sequence)
 
 def safe_read_csv(csv_file):
-    """Safely read CSV files handling NaN/INF values"""
+    """read CSV files handling NaN/INF values"""
     # Handle both file paths and uploaded files
     if hasattr(csv_file, 'read'):
         # It's an uploaded file
