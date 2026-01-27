@@ -576,12 +576,8 @@ def main():
         st.header(f"Download {template_type} Template")
         
         st.success(f"""
-        **🎯 This {template_type} template includes:**
-        - 🎨 **borders** and cell formatting
-        - 📋 **Real dropdown menus** (no manual setup needed)
-        - 🔵 **headers** with white text
-        - 📐 **Centered alignment** for numbers
-        - 📝 **Instructions sheet** with guidance
+        **🎯  includes:**
+        - 🎨  cell formatting
         - 💡 **Data validation** to prevent errors
         """)
         
