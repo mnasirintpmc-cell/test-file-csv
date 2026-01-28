@@ -1,4 +1,3 @@
-
 import streamlit as st
 import pandas as pd
 import io
@@ -6,806 +5,336 @@ from datetime import datetime
 import numpy as np
 import math
 
+# =========================================================
+# SESSION HELPERS (MINIMAL & SAFE)
+# =========================================================
+
+def persist(key, value):
+    if value is not None:
+        st.session_state[key] = value
+
+def get(key):
+    return st.session_state.get(key, None)
+
+def reset_editor(key, df):
+    if key not in st.session_state or st.session_state[key].shape != df.shape:
+        st.session_state[key] = df.copy()
+
+# =========================================================
+# CSV SAFE READER
+# =========================================================
+
 def safe_read_csv(file_path_or_buffer):
-    """ read CSV files """
     try:
-        # Try reading with different encodings and delimiters
         encodings = ['utf-8', 'latin-1', 'cp1252', 'iso-8859-1']
-        
         for encoding in encodings:
             try:
-                # Read with semicolon delimiter and handle NaN/INF
                 df = pd.read_csv(
-                    file_path_or_buffer, 
+                    file_path_or_buffer,
                     delimiter=';',
                     encoding=encoding,
-                    na_values=['NaN', 'NAN', 'nan', 'INF', 'INFINITY', 'inf', 'infinity', '', ' ', 'NULL', 'null'],
+                    na_values=['NaN','NAN','nan','INF','INFINITY','inf','infinity','',' ','NULL','null'],
                     keep_default_na=True,
                     skipinitialspace=True
                 )
-                
-                # Replace any remaining NaN/INF values with 0
                 df = df.replace([np.nan, math.inf, -math.inf], 0)
-                
-                # Convert all numeric columns to appropriate types
-                for col in df.columns:
-                    if df[col].dtype == 'object':
-                        try:
-                            df[col] = pd.to_numeric(df[col], errors='ignore')
-                        except:
-                            pass
-                
-                st.success(f"✅ File read successfully with {encoding} encoding")
                 return df
-                
-            except UnicodeDecodeError:
+            except Exception:
                 continue
-            except Exception as e:
-                continue
-        
-        # If all encodings fail, try with default settings
-        st.warning("⚠️ Using fallback CSV reader")
+
         df = pd.read_csv(file_path_or_buffer, delimiter=';')
-        df = df.replace([np.nan, math.inf, -math.inf], 0)
-        return df
-        
+        return df.replace([np.nan, math.inf, -math.inf], 0)
+
     except Exception as e:
-        st.error(f"❌ Error reading CSV file: {str(e)}")
+        st.error(f"❌ Error reading CSV: {e}")
         return pd.DataFrame()
 
+# =========================================================
+# FILE TYPE DETECTION
+# =========================================================
+
 def detect_file_type(df):
-    """Detect whether it's a Main Seal or Separation Seal file"""
     if df.empty:
-        return 'unknown'
-    
-    columns = df.columns.tolist()
-    
-    # Check for machine column names
-    if 'TST_CellPresDemand' in columns:
-        return 'main_seal'
-    elif 'TST_SepSealFlwSet1' in columns:
-        return 'separation_seal'
-    else:
-        # Check for technician column names
-        if 'Cell_Pressure_bar' in columns:
-            return 'main_seal'
-        elif 'Sep_Seal_Flow_Set1' in columns:
-            return 'separation_seal'
-        return 'unknown'
+        return "unknown"
+
+    cols = df.columns.tolist()
+
+    if "TST_CellPresDemand" in cols:
+        return "main_seal"
+    if "TST_SepSealFlwSet1" in cols:
+        return "separation_seal"
+    if "Cell_Pressure_bar" in cols:
+        return "main_seal"
+    if "Sep_Seal_Flow_Set1" in cols:
+        return "separation_seal"
+
+    return "unknown"
+
+# =========================================================
+# COLUMN MAPPINGS (UNCHANGED LOGIC)
+# =========================================================
 
 def get_column_mapping(file_type):
-    """Get the appropriate column mapping based on file type"""
-    
-    if file_type == 'main_seal':
+    if file_type == "main_seal":
         return {
-            'technician_to_machine': {
-                'Speed_RPM': 'TST_SpeedDem',
-                'Cell_Pressure_bar': 'TST_CellPresDemand',
-                'Interface_Pressure_bar': 'TST_InterPresDemand',
-                'BP_Drive_End_bar': 'TST_InterBPDemand_DE',
-                'BP_Non_Drive_End_bar': 'TST_InterBPDemand_NDE',
-                'Gas_Injection_bar': 'TST_GasInjectionDemand',
-                'Duration_s': 'TST_StepDuration',
-                'Auto_Proceed': 'TST_APFlag',
-                'Temperature_C': 'TST_TempDemand',
-                'Gas_Type': 'TST_GasType',
-                'Test_Mode': 'TST_TestMode',
-                'Measurement': 'TST_MeasurementReq',
-                'Torque_Check': 'TST_TorqueCheck'
+            "technician_to_machine": {
+                "Speed_RPM": "TST_SpeedDem",
+                "Cell_Pressure_bar": "TST_CellPresDemand",
+                "Interface_Pressure_bar": "TST_InterPresDemand",
+                "BP_Drive_End_bar": "TST_InterBPDemand_DE",
+                "BP_Non_Drive_End_bar": "TST_InterBPDemand_NDE",
+                "Gas_Injection_bar": "TST_GasInjectionDemand",
+                "Duration_s": "TST_StepDuration",
+                "Auto_Proceed": "TST_APFlag",
+                "Temperature_C": "TST_TempDemand",
+                "Gas_Type": "TST_GasType",
+                "Test_Mode": "TST_TestMode",
+                "Measurement": "TST_MeasurementReq",
+                "Torque_Check": "TST_TorqueCheck"
             },
-            'machine_to_technician': {
-                'TST_SpeedDem': 'Speed_RPM',
-                'TST_CellPresDemand': 'Cell_Pressure_bar',
-                'TST_InterPresDemand': 'Interface_Pressure_bar',
-                'TST_InterBPDemand_DE': 'BP_Drive_End_bar',
-                'TST_InterBPDemand_NDE': 'BP_Non_Drive_End_bar',
-                'TST_GasInjectionDemand': 'Gas_Injection_bar',
-                'TST_StepDuration': 'Duration_s',
-                'TST_APFlag': 'Auto_Proceed',
-                'TST_TempDemand': 'Temperature_C',
-                'TST_GasType': 'Gas_Type',
-                'TST_TestMode': 'Test_Mode',
-                'TST_MeasurementReq': 'Measurement',
-                'TST_TorqueCheck': 'Torque_Check'
-            },
-            'headers': [
-                'Step', 'Speed_RPM', 'Cell_Pressure_bar', 'Interface_Pressure_bar',
-                'BP_Drive_End_bar', 'BP_Non_Drive_End_bar', 'Gas_Injection_bar',
-                'Duration_s', 'Auto_Proceed', 'Temperature_C', 'Gas_Type', 
-                'Test_Mode', 'Measurement', 'Torque_Check', 'Notes'
-            ],
-            'sample_data': [
-                [1, 0, 0.21, 0, 0, 0, 0, 2, 'No', 30, 'Air', 'Mode 1', 'Yes', 'No', 'Initial low pressure test'],
-                [2, 0, 0.4, 0, 0, 0, 0, 2, 'No', 30, 'Air', 'Mode 1', 'Yes', 'No', 'Pressure increase'],
-                [3, 0, 1.0, 0, 0, 0, 0, 2, 'No', 30, 'Air', 'Mode 1', 'Yes', 'No', 'Medium pressure check'],
-                [4, 3600, 10.0, 0, 1.0, 1.0, 0, 10, 'Yes', 155, 'Air', 'Mode 1', 'Yes', 'No', 'High speed operation'],
-                [5, 0, 0, 0, 0, 0, 0, 1, 'No', 155, 'Air', 'Mode 1', 'No', 'No', 'System cool down']
-            ]
+            "machine_to_technician": {
+                "TST_SpeedDem": "Speed_RPM",
+                "TST_CellPresDemand": "Cell_Pressure_bar",
+                "TST_InterPresDemand": "Interface_Pressure_bar",
+                "TST_InterBPDemand_DE": "BP_Drive_End_bar",
+                "TST_InterBPDemand_NDE": "BP_Non_Drive_End_bar",
+                "TST_GasInjectionDemand": "Gas_Injection_bar",
+                "TST_StepDuration": "Duration_s",
+                "TST_APFlag": "Auto_Proceed",
+                "TST_TempDemand": "Temperature_C",
+                "TST_GasType": "Gas_Type",
+                "TST_TestMode": "Test_Mode",
+                "TST_MeasurementReq": "Measurement",
+                "TST_TorqueCheck": "Torque_Check"
+            }
         }
-    
-    elif file_type == 'separation_seal':
+
+    if file_type == "separation_seal":
         return {
-            'technician_to_machine': {
-                'Speed_RPM': 'TST_SpeedDem',
-                'Sep_Seal_Flow_Set1': 'TST_SepSealFlwSet1',
-                'Sep_Seal_Flow_Set2': 'TST_SepSealFlwSet2',
-                'Sep_Seal_Pressure_Set1': 'TST_SepSealPSet1',
-                'Sep_Seal_Pressure_Set2': 'TST_SepSealPSet2',
-                'Sep_Seal_Control_Type': 'TST_SepSealControlTyp',
-                'Duration_s': 'TST_StepDuration',
-                'Auto_Proceed': 'TST_APFlag',
-                'Temperature_C': 'TST_TempDemand',
-                'Gas_Type': 'TST_GasType',
-                'Measurement': 'TST_MeasurementReq',
-                'Torque_Check': 'TST_TorqueCheck'
+            "technician_to_machine": {
+                "Speed_RPM": "TST_SpeedDem",
+                "Sep_Seal_Flow_Set1": "TST_SepSealFlwSet1",
+                "Sep_Seal_Flow_Set2": "TST_SepSealFlwSet2",
+                "Sep_Seal_Pressure_Set1": "TST_SepSealPSet1",
+                "Sep_Seal_Pressure_Set2": "TST_SepSealPSet2",
+                "Sep_Seal_Control_Type": "TST_SepSealControlTyp",
+                "Duration_s": "TST_StepDuration",
+                "Auto_Proceed": "TST_APFlag",
+                "Temperature_C": "TST_TempDemand",
+                "Gas_Type": "TST_GasType",
+                "Measurement": "TST_MeasurementReq",
+                "Torque_Check": "TST_TorqueCheck"
             },
-            'machine_to_technician': {
-                'TST_SpeedDem': 'Speed_RPM',
-                'TST_SepSealFlwSet1': 'Sep_Seal_Flow_Set1',
-                'TST_SepSealFlwSet2': 'Sep_Seal_Flow_Set2',
-                'TST_SepSealPSet1': 'Sep_Seal_Pressure_Set1',
-                'TST_SepSealPSet2': 'Sep_Seal_Pressure_Set2',
-                'TST_SepSealControlTyp': 'Sep_Seal_Control_Type',
-                'TST_StepDuration': 'Duration_s',
-                'TST_APFlag': 'Auto_Proceed',
-                'TST_TempDemand': 'Temperature_C',
-                'TST_GasType': 'Gas_Type',
-                'TST_MeasurementReq': 'Measurement',
-                'TST_TorqueCheck': 'Torque_Check'
-            },
-            'headers': [
-                'Step', 'Speed_RPM', 'Sep_Seal_Flow_Set1', 'Sep_Seal_Flow_Set2',
-                'Sep_Seal_Pressure_Set1', 'Sep_Seal_Pressure_Set2', 'Sep_Seal_Control_Type',
-                'Duration_s', 'Auto_Proceed', 'Temperature_C', 'Gas_Type', 
-                'Measurement', 'Torque_Check', 'Notes'
-            ],
-            'sample_data': [
-                [1, 0, 47.5, 0, 1.0, 0, 0, 2, 'No', 100, 'Air', 'Yes', 'No', 'Initial stationary test'],
-                [2, 1275, 47.5, 0, 1.0, 0, 0, 5, 'Yes', 100, 'Air', 'Yes', 'No', 'Low speed operation'],
-                [3, 2550, 47.5, 0, 1.0, 0, 0, 5, 'Yes', 100, 'Air', 'Yes', 'No', 'Medium speed'],
-                [4, 5100, 47.5, 0, 1.0, 0, 0, 5, 'Yes', 100, 'Air', 'Yes', 'No', 'High speed'],
-                [5, 16550, 47.5, 0, 1.0, 0, 0, 10, 'Yes', 100, 'Air', 'Yes', 'No', 'Max speed test']
-            ]
+            "machine_to_technician": {
+                "TST_SpeedDem": "Speed_RPM",
+                "TST_SepSealFlwSet1": "Sep_Seal_Flow_Set1",
+                "TST_SepSealFlwSet2": "Sep_Seal_Flow_Set2",
+                "TST_SepSealPSet1": "Sep_Seal_Pressure_Set1",
+                "TST_SepSealPSet2": "Sep_Seal_Pressure_Set2",
+                "TST_SepSealControlTyp": "Sep_Seal_Control_Type",
+                "TST_StepDuration": "Duration_s",
+                "TST_APFlag": "Auto_Proceed",
+                "TST_TempDemand": "Temperature_C",
+                "TST_GasType": "Gas_Type",
+                "TST_MeasurementReq": "Measurement",
+                "TST_TorqueCheck": "Torque_Check"
+            }
         }
-    
-    else:
-        return None
 
-def create_professional_excel_from_data(technician_df, file_type):
-    """Create a formatted Excel file from existing test data"""
-    
-    mapping = get_column_mapping(file_type)
-    if not mapping:
-        return None
-    
-    output = io.BytesIO()
-    
-    with pd.ExcelWriter(output, engine='xlsxwriter') as workbook:
-        # Write main data sheet
-        technician_df.to_excel(workbook, sheet_name='TEST_SEQUENCE', index=False)
-        
-        # Get xlsxwriter objects
-        xlsx_workbook = workbook.book
-        xlsx_worksheet = workbook.sheets['TEST_SEQUENCE']
-        
-        # Define formats
-        header_format = xlsx_workbook.add_format({
-            'bold': True,
-            'text_wrap': True,
-            'valign': 'top',
-            'fg_color': '#366092',
-            'font_color': 'white',
-            'border': 1,
-            'align': 'center'
-        })
-        
-        cell_format = xlsx_workbook.add_format({
-            'border': 1,
-            'align': 'center',
-            'valign': 'vcenter'
-        })
-        
-        number_format = xlsx_workbook.add_format({
-            'border': 1,
-            'align': 'center',
-            'num_format': '0.00'
-        })
-        
-        notes_format = xlsx_workbook.add_format({
-            'border': 1,
-            'align': 'left',
-            'valign': 'vcenter'
-        })
-        
-        # Apply header formatting
-        for col_num, value in enumerate(technician_df.columns.values):
-            xlsx_worksheet.write(0, col_num, value, header_format)
-        
-        # Apply cell formatting to all data rows
-        for row_num in range(1, len(technician_df) + 1):
-            for col_num, col_name in enumerate(technician_df.columns):
-                value = technician_df.iloc[row_num-1, col_num]
-                
-                if col_name == 'Notes':
-                    xlsx_worksheet.write(row_num, col_num, value, notes_format)
-                elif col_name in ['Step', 'Duration_s', 'Temperature_C']:
-                    xlsx_worksheet.write(row_num, col_num, value, cell_format)
-                elif any(num_term in col_name for num_term in ['Speed', 'Pressure', 'Flow']):
-                    try:
-                        float_value = float(value)
-                        xlsx_worksheet.write(row_num, col_num, float_value, number_format)
-                    except (ValueError, TypeError):
-                        xlsx_worksheet.write(row_num, col_num, value, cell_format)
-                else:
-                    xlsx_worksheet.write(row_num, col_num, value, cell_format)
-        
-        # Set column widths
-        column_widths = [8, 12, 18, 18, 18, 18, 20, 12, 12, 15, 12, 12, 12, 30]
-        for col_num, width in enumerate(column_widths[:len(technician_df.columns)]):
-            xlsx_worksheet.set_column(col_num, col_num, width)
-        
-        # Add data validation for dropdowns
-        dropdown_columns = {
-            'Auto_Proceed': ['Yes', 'No'],
-            'Gas_Type': ['Air', 'N2', 'He'],
-            'Measurement': ['Yes', 'No'],
-            'Torque_Check': ['Yes', 'No']
-        }
-        
-        if file_type == 'main_seal':
-            dropdown_columns['Test_Mode'] = ['Mode 1', 'Mode 2']
-        
-        # Find column indices for dropdowns
-        col_indices = {col: list(technician_df.columns).index(col) for col in dropdown_columns.keys() if col in technician_df.columns}
-        
-        for col_name, col_idx in col_indices.items():
-            col_letter = chr(65 + col_idx)  # A, B, C, etc.
-            xlsx_worksheet.data_validation(f'{col_letter}2:{col_letter}{len(technician_df)+1}', {
-                'validate': 'list',
-                'source': dropdown_columns[col_name],
-                'error_title': 'Invalid Input',
-                'error_message': f'Please select from: {", ".join(dropdown_columns[col_name])}'
-            })
-        
-        # Create INSTRUCTIONS sheet
-        instructions_worksheet = xlsx_workbook.add_worksheet('INSTRUCTIONS')
-        
-        seal_type = "Main Seal" if file_type == 'main_seal' else "Separation Seal"
-        instructions = [
-            f"{seal_type.upper()} TEST SEQUENCE - EXPORTED {datetime.now().strftime('%Y-%m-%d')}",
-            "",
-            "HOW TO USE THIS FILE:",
-            "1. This file contains your current test sequence ",
-            "2. All cells have proper borders and formatting",
-            "3. Dropdown menus are included for standardized inputs",
-            "4. You can edit this file and upload it back to the web app",
-            "5. Use the conversion tool to generate machine CSV files",
-            "",
-            "FIELD DESCRIPTIONS:"
-        ]
-        
-        # Add field descriptions based on file type
-        field_descriptions = {
-            'main_seal': [
-                "Step: Sequential test step number (1, 2, 3...)",
-                "Speed_RPM: Rotational speed (0-3600 RPM)",
-                "Cell_Pressure_bar: Main chamber pressure (0.1-100 bar)",
-                "Interface_Pressure_bar: Interface pressure (0-40 bar)",
-                "BP_Drive_End_bar: Back pressure drive end (0-7 bar)",
-                "BP_Non_Drive_End_bar: Back pressure non-drive end (0-7 bar)",
-                "Gas_Injection_bar: Gas injection pressure (0-5 bar)",
-                "Duration_s: Step duration in seconds (1-300)",
-                "Auto_Proceed: Automatic step progression (Yes/No)",
-                "Temperature_C: Test temperature (30-155°C)",
-                "Gas_Type: Test gas type (Air/N2/He)",
-                "Test_Mode: Operating mode (Mode 1/Mode 2)",
-                "Measurement: Take measurements (Yes/No)",
-                "Torque_Check: Perform torque check (Yes/No)",
-                "Notes: Additional comments or observations"
-            ],
-            'separation_seal': [
-                "Step: Sequential test step number (1, 2, 3...)",
-                "Speed_RPM: Rotational speed (0-16550 RPM)",
-                "Sep_Seal_Flow_Set1: Separation seal flow setting 1 (0-100)",
-                "Sep_Seal_Flow_Set2: Separation seal flow setting 2 (0-100)",
-                "Sep_Seal_Pressure_Set1: Separation seal pressure setting 1 (0-1 bar)",
-                "Sep_Seal_Pressure_Set2: Separation seal pressure setting 2 (0-1 bar)",
-                "Sep_Seal_Control_Type: Control type (0=Pressure, 1=Flow)",
-                "Duration_s: Step duration in seconds (1-300)",
-                "Auto_Proceed: Automatic step progression (Yes/No)",
-                "Temperature_C: Test temperature (100°C)",
-                "Gas_Type: Test gas type (Air/N2/He)",
-                "Measurement: Take measurements (Yes/No)",
-                "Torque_Check: Perform torque check (Yes/No)",
-                "Notes: Additional comments or observations"
-            ]
-        }
-        
-        instructions.extend(field_descriptions[file_type])
-        
-        # Write instructions with formatting
-        title_format = xlsx_workbook.add_format({
-            'bold': True,
-            'font_size': 14,
-            'font_color': '#366092',
-            'valign': 'top'
-        })
-        
-        header_format_instructions = xlsx_workbook.add_format({
-            'bold': True,
-            'font_color': '#366092',
-            'valign': 'top'
-        })
-        
-        for row_num, instruction in enumerate(instructions):
-            if row_num == 0:
-                instructions_worksheet.write(row_num, 0, instruction, title_format)
-            elif "HOW TO USE" in instruction or "FIELD DESCRIPTIONS" in instruction:
-                instructions_worksheet.write(row_num, 0, instruction, header_format_instructions)
-            else:
-                instructions_worksheet.write(row_num, 0, instruction)
-        
-        instructions_worksheet.set_column('A:A', 60)
-    
-    output.seek(0)
-    return output
+    return None
 
-def analyze_csv_file(uploaded_file):
-    """Analyze and display detailed information about the CSV file"""
-    
-    st.header("🔍 CSV File Analysis")
-    
-    # Show file info first
-    st.subheader("📁 Uploaded File Information")
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.metric("File Name", uploaded_file.name)
-    with col2:
-        st.metric("File Size", f"{len(uploaded_file.getvalue()) / 1024:.1f} KB")
-    with col3:
-        st.metric("File Type", "CSV")
-    
-    # Read the file with safe reader
-    st.subheader("📊 Reading File Content...")
-    df = safe_read_csv(uploaded_file)
-    
-    if df.empty:
-        st.error("❌ Could not read the CSV file")
-        return None, 'unknown'
-    
-    # Display file structure information
-    st.subheader("📋 File Structure Analysis")
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        st.metric("Total Rows", len(df))
-    with col2:
-        st.metric("Total Columns", len(df.columns))
-    with col3:
-        file_type = detect_file_type(df)
-        seal_type = "Main Seal" if file_type == 'main_seal' else "Separation Seal" if file_type == 'separation_seal' else "Unknown"
-        st.metric("Detected Type", seal_type)
-    with col4:
-        st.metric("Data Points", len(df) * len(df.columns))
-    
-    # Show raw data preview - THIS IS THE IMPORTANT PART
-    st.subheader("📄 Imported File Content (Raw Data)")
-    st.info("This is the exact content of your uploaded CSV file:")
-    
-    # Display the raw data
-    st.dataframe(df, use_container_width=True, height=300)
-    
-    # Show data summary
-    with st.expander("🔍 Detailed Data Summary", expanded=True):
-        st.write("**First 5 rows:**")
-        st.dataframe(df.head(), use_container_width=True)
-        
-        st.write("**Data Types:**")
-        dtype_df = pd.DataFrame({
-            'Column': df.columns,
-            'Data Type': df.dtypes,
-            'Non-Null Count': df.count(),
-            'Null Count': df.isnull().sum()
-        })
-        st.dataframe(dtype_df, use_container_width=True)
-    
-    # Show column information in detail
-    st.subheader("🗂️ Column Details")
-    col_info = []
-    for col in df.columns:
-        col_info.append({
-            'Column Name': col,
-            'Data Type': str(df[col].dtype),
-            'Non-Null Values': df[col].count(),
-            'Null Values': df[col].isnull().sum(),
-            'Unique Values': df[col].nunique(),
-            'Sample Values': str(df[col].head(3).tolist())
-        })
-    
-    col_df = pd.DataFrame(col_info)
-    st.dataframe(col_df, use_container_width=True)
-    
-    return df, file_type
-
-def convert_machine_to_technician(df, file_type):
-    """Convert machine CSV to technician format"""
-    
-    mapping = get_column_mapping(file_type)
-    if not mapping:
-        st.error("❌ Unsupported file format")
-        return None
-    
-    # Create a copy to avoid modifying original
-    tech_df = df.copy()
-    
-    # Rename columns
-    machine_to_tech = mapping['machine_to_technician']
-    
-    # Only rename columns that exist in the DataFrame
-    rename_dict = {}
-    for machine_col, tech_col in machine_to_tech.items():
-        if machine_col in tech_df.columns:
-            rename_dict[machine_col] = tech_col
-    
-    tech_df = tech_df.rename(columns=rename_dict)
-    
-    # Convert machine codes to readable values
-    tech_df = convert_to_readable_values(tech_df, file_type)
-    
-    # Add Step numbers and Notes column
-    tech_df.insert(0, 'Step', range(1, len(tech_df) + 1))
-    if 'Notes' not in tech_df.columns:
-        tech_df['Notes'] = ''
-    
-    return tech_df
+# =========================================================
+# VALUE CONVERSIONS
+# =========================================================
 
 def convert_to_readable_values(df, file_type):
-    """Convert machine codes to readable values"""
-    
     df = df.copy()
-    
-    # Common conversions
-    if 'Auto_Proceed' in df.columns:
-        df['Auto_Proceed'] = df['Auto_Proceed'].map({0: 'No', 1: 'Yes', '0': 'No', '1': 'Yes'})
-        df['Auto_Proceed'] = df['Auto_Proceed'].fillna('No')
-    
-    if 'Measurement' in df.columns:
-        df['Measurement'] = df['Measurement'].map({0: 'No', 1: 'Yes', '0': 'No', '1': 'Yes'})
-        df['Measurement'] = df['Measurement'].fillna('No')
-    
-    if 'Torque_Check' in df.columns:
-        df['Torque_Check'] = df['Torque_Check'].map({0: 'No', 1: 'Yes', '0': 'No', '1': 'Yes'})
-        df['Torque_Check'] = df['Torque_Check'].fillna('No')
-    
-    # Type-specific conversions
-    if file_type == 'main_seal' and 'Test_Mode' in df.columns:
-        df['Test_Mode'] = df['Test_Mode'].map({1: 'Mode 1', 2: 'Mode 2', '1': 'Mode 1', '2': 'Mode 2'})
-        df['Test_Mode'] = df['Test_Mode'].fillna('Mode 1')
-    
-    # Handle Gas_Type conversions
-    if 'Gas_Type' in df.columns:
-        df['Gas_Type'] = df['Gas_Type'].replace({'Air': 'Air', 'N2': 'N2', 'He': 'He'})
-    
+
+    for col in ["Auto_Proceed", "Measurement", "Torque_Check"]:
+        if col in df.columns:
+            df[col] = df[col].map({0: "No", 1: "Yes", "0": "No", "1": "Yes"}).fillna("No")
+
+    if file_type == "main_seal" and "Test_Mode" in df.columns:
+        df["Test_Mode"] = df["Test_Mode"].map({1: "Mode 1", 2: "Mode 2"}).fillna("Mode 1")
+
     return df
 
+def convert_to_machine_codes(df, file_type):
+    df = df.copy()
+
+    for col in ["TST_APFlag", "TST_MeasurementReq", "TST_TorqueCheck"]:
+        if col in df.columns:
+            df[col] = df[col].map({"Yes": 1, "No": 0}).fillna(0)
+
+    if file_type == "main_seal" and "TST_TestMode" in df.columns:
+        df["TST_TestMode"] = df["TST_TestMode"].map({"Mode 1": 1, "Mode 2": 2}).fillna(1)
+
+    return df
+
+# =========================================================
+# CONVERSION FUNCTIONS
+# =========================================================
+
+def convert_machine_to_technician(df, file_type):
+    mapping = get_column_mapping(file_type)
+    tech_df = df.rename(columns=mapping["machine_to_technician"])
+    tech_df = convert_to_readable_values(tech_df, file_type)
+
+    tech_df.insert(0, "Step", range(1, len(tech_df) + 1))
+    if "Notes" not in tech_df.columns:
+        tech_df["Notes"] = ""
+
+    return tech_df
+
+# =========================================================
+# EDITABLE DATAFRAME (FIXED)
+# =========================================================
+
 def editable_dataframe(df, key, height=400):
-    """Create an editable dataframe with session state persistence"""
-    
-    # Initialize session state for this dataframe if not exists
-    if key not in st.session_state:
-        st.session_state[key] = df.copy()
-    
-    # Display editable dataframe
-    st.info("✏️ **Editable Table**: Click on any cell to edit. Changes are saved automatically.")
-    
-    # Use st.data_editor for editable table
-    edited_df = st.data_editor(
+    reset_editor(key, df)
+
+    edited = st.data_editor(
         st.session_state[key],
         key=f"editor_{key}",
         use_container_width=True,
         height=height,
-        num_rows="dynamic"  # Allow adding/deleting rows
+        num_rows="dynamic"
     )
-    
-    # Update session state with changes
-    st.session_state[key] = edited_df
-    
-    # Show action buttons
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        if st.button("🔄 Reset to Original", key=f"reset_{key}"):
-            st.session_state[key] = df.copy()
-            st.rerun()
-    
-    with col2:
-        if st.button("➕ Add New Row", key=f"add_{key}"):
-            new_row = {col: '' for col in st.session_state[key].columns}
-            st.session_state[key] = pd.concat([st.session_state[key], pd.DataFrame([new_row])], ignore_index=True)
-            st.rerun()
-    
-    with col3:
-        if st.button("💾 Save Changes", key=f"save_{key}"):
-            st.success("✅ Changes saved successfully!")
-    
-    return edited_df
 
-def convert_to_machine_codes(df, file_type):
-    """Convert readable values to machine codes"""
-    
-    # Common conversions
-    if 'TST_APFlag' in df.columns:
-        df['TST_APFlag'] = df['TST_APFlag'].map({'Yes': 1, 'No': 0, 'YES': 1, 'NO': 0})
-        # Fill any NaN values with 0
-        df['TST_APFlag'] = df['TST_APFlag'].fillna(0)
-    
-    if 'TST_MeasurementReq' in df.columns:
-        df['TST_MeasurementReq'] = df['TST_MeasurementReq'].map({'Yes': 1, 'No': 0, 'YES': 1, 'NO': 0})
-        df['TST_MeasurementReq'] = df['TST_MeasurementReq'].fillna(0)
-    
-    if 'TST_TorqueCheck' in df.columns:
-        df['TST_TorqueCheck'] = df['TST_TorqueCheck'].map({'Yes': 1, 'No': 0, 'YES': 1, 'NO': 0})
-        df['TST_TorqueCheck'] = df['TST_TorqueCheck'].fillna(0)
-    
-    # Type-specific conversions
-    if file_type == 'main_seal' and 'TST_TestMode' in df.columns:
-        df['TST_TestMode'] = df['TST_TestMode'].map({'Mode 1': 1, 'Mode 2': 2, 'MODE 1': 1, 'MODE 2': 2})
-        df['TST_TestMode'] = df['TST_TestMode'].fillna(1)
-    
-    return df
+    st.session_state[key] = edited
+    return edited
+
+# =========================================================
+# MAIN APP
+# =========================================================
 
 def main():
     st.title("⚙️ Universal Seal Test Manager")
-    st.markdown("### File Analysis")
-    
-    # Sidebar
+
     st.sidebar.title("🔧 Operations")
     operation = st.sidebar.radio(
         "Choose Operation:",
-        ["📥 Download Template", "🔄 Excel to Machine CSV", "📤 Machine CSV to Excel", "👀 View Current Test"]
+        [
+            "🔄 Excel to Machine CSV",
+            "📤 Machine CSV to Excel",
+            "👀 View Current Test"
+        ]
     )
-    
-    # Template type selection
-    template_type = st.sidebar.selectbox(
-        "Select Seal Type:",
-        ["Main Seal", "Separation Seal"]
-    )
-    
-    file_type_map = {"Main Seal": "main_seal", "Separation Seal": "separation_seal"}
-    selected_file_type = file_type_map[template_type]
-    
-    if operation == "📥 Download Template":
-        st.header(f"Download {template_type} Template")
-        
-        st.success(f"""
-        **🎯  includes:**
-        - 🎨  cell formatting
-        - 💡 **Data validation** to prevent errors
-        """)
-        
-        # Create and download template
-        excel_output = create_professional_excel_from_data(
-            pd.DataFrame(get_column_mapping(selected_file_type)['sample_data'], 
-                        columns=get_column_mapping(selected_file_type)['headers']), 
-            selected_file_type
+
+    # =====================================================
+    # EXCEL → MACHINE CSV
+    # =====================================================
+
+    if operation == "🔄 Excel to Machine CSV":
+        st.header("Excel → Machine CSV")
+
+        uploaded_excel = st.file_uploader(
+            "Upload Excel Template",
+            type=["xlsx"],
+            key="excel_upload"
         )
-        
-        if excel_output:
+        persist("excel_file", uploaded_excel)
+
+        excel_file = get("excel_file")
+        if excel_file:
+            df = pd.read_excel(excel_file, sheet_name="TEST_SEQUENCE")
+            df = df.dropna(subset=["Step"]).reset_index(drop=True)
+
+            file_type = detect_file_type(df)
+            mapping = get_column_mapping(file_type)
+
+            st.subheader("✏️ Editable Data")
+            edited_df = editable_dataframe(df, "excel_editor")
+
+            rename_dict = {
+                tech: mach
+                for tech, mach in mapping["technician_to_machine"].items()
+                if tech in edited_df.columns
+            }
+
+            machine_df = edited_df.rename(columns=rename_dict)
+            machine_df = convert_to_machine_codes(machine_df, file_type)
+            machine_df = machine_df.drop(
+                [c for c in ["Step", "Notes"] if c in machine_df.columns],
+                axis=1
+            )
+
+            st.subheader("Machine CSV Preview")
+            st.dataframe(machine_df, use_container_width=True)
+
+            csv_data = machine_df.to_csv(index=False, sep=";")
             st.download_button(
-                label=f"📥 Download {template_type} Template (.xlsx)",
-                data=excel_output.getvalue(),
-                file_name=f"{template_type.lower().replace(' ', '_')}_template_{datetime.now().strftime('%Y%m%d')}.xlsx",
+                "📥 Download Machine CSV",
+                csv_data,
+                file_name=f"{file_type}_sequence_{datetime.now():%Y%m%d}.csv",
+                mime="text/csv"
+            )
+
+    # =====================================================
+    # MACHINE CSV → EXCEL
+    # =====================================================
+
+    elif operation == "📤 Machine CSV to Excel":
+        st.header("Machine CSV → Excel")
+
+        uploaded_csv = st.file_uploader(
+            "Upload Machine CSV",
+            type=["csv"],
+            key="csv_upload"
+        )
+        persist("csv_file", uploaded_csv)
+
+        csv_file = get("csv_file")
+        if csv_file:
+            df = safe_read_csv(csv_file)
+            file_type = detect_file_type(df)
+
+            tech_df = convert_machine_to_technician(df, file_type)
+
+            st.subheader("✏️ Editable Data")
+            edited_df = editable_dataframe(tech_df, "csv_editor")
+
+            output = io.BytesIO()
+            with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+                edited_df.to_excel(writer, index=False, sheet_name="TEST_SEQUENCE")
+            output.seek(0)
+
+            st.download_button(
+                "📥 Download Excel",
+                output.getvalue(),
+                file_name=f"{file_type}_professional_{datetime.now():%Y%m%d_%H%M}.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
-        
-        # Show template preview
-        mapping = get_column_mapping(selected_file_type)
-        if mapping:
-            st.subheader("📋 Template Preview")
-            preview_df = pd.DataFrame(mapping['sample_data'], columns=mapping['headers'])
-            st.dataframe(preview_df, use_container_width=True)
-    
-    elif operation == "🔄 Excel to Machine CSV":
-        st.header("Convert Excel to Machine CSV")
-        
-        uploaded_file = st.file_uploader("Upload your completed Excel template", type=['xlsx'])
-        
-        if uploaded_file:
-            try:
-                # Read Excel file
-                df = pd.read_excel(uploaded_file, sheet_name='TEST_SEQUENCE')
-                
-                # Remove empty rows
-                df = df.dropna(subset=['Step']).reset_index(drop=True)
-                
-                # Detect file type based on columns present
-                file_type = detect_file_type(df)
-                mapping = get_column_mapping(file_type)
-                
-                if not mapping:
-                    st.error("Unsupported file format. Please use the provided templates.")
-                    return None
-                
-                # Show editable preview
-                st.subheader("✏️ Editable Data Preview")
-                edited_df = editable_dataframe(df, "excel_preview")
-                
-                # DEBUG: Show what columns we have
-                st.info(f"📊 Found columns: {list(edited_df.columns)}")
-                
-                # Rename columns - only rename the ones that exist
-                existing_columns = edited_df.columns.tolist()
-                rename_dict = {}
-                
-                for tech_col, machine_col in mapping['technician_to_machine'].items():
-                    if tech_col in existing_columns:
-                        rename_dict[tech_col] = machine_col
-                
-                machine_df = edited_df.rename(columns=rename_dict)
-                
-                # Convert readable values back to machine codes
-                machine_df = convert_to_machine_codes(machine_df, file_type)
-                
-                # Remove Step and Notes columns for machine CSV (if they exist)
-                columns_to_drop = ['Step', 'Notes']
-                machine_df = machine_df.drop([col for col in columns_to_drop if col in machine_df.columns], axis=1)
-                
-                # DEBUG: Show final columns
-                st.info(f"🔧 Final machine columns: {list(machine_df.columns)}")
-                
-                seal_type = "Main Seal" if file_type == 'main_seal' else "Separation Seal"
-                st.success(f"✅ Successfully converted {len(machine_df)} {seal_type} test steps!")
-                
-                # Preview final machine format
-                st.subheader("Machine CSV Preview")
-                st.dataframe(machine_df, use_container_width=True)
-                
-                # Show conversion summary
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    st.metric("Total Steps", len(machine_df))
-                with col2:
-                    if 'TST_APFlag' in machine_df.columns:
-                        auto_steps = len(machine_df[machine_df['TST_APFlag'] == 1])
-                        st.metric("Auto Proceed Steps", auto_steps)
-                with col3:
-                    if 'TST_StepDuration' in machine_df.columns:
-                        total_duration = machine_df['TST_StepDuration'].sum()
-                        st.metric("Total Duration", f"{total_duration}s")
-                
-                # Download machine CSV
-                csv_data = machine_df.to_csv(index=False, sep=';')
-                st.download_button(
-                    label="📥 Download Machine CSV",
-                    data=csv_data,
-                    file_name=f"{file_type}_sequence_{datetime.now().strftime('%Y%m%d')}.csv",
-                    mime="text/csv"
-                )
-            
-            except Exception as e:
-                st.error(f"❌ Error converting file: {str(e)}")
-                st.info("Make sure you're using the provided template format.")
-    
-    elif operation == "📤 Machine CSV to Excel":
-        st.header("Convert Machine CSV to Excel")
-        st.info("""
-        **This operation will:**
-        - 🔍 **Analyze** your CSV file structure
-        - 🛡️ **Handle NaN/INF** values automatically  
-        - 🔄 **Detect file type** (Main Seal or Separation Seal)
-        - 📊 **Show detailed information** about your data
-        - 💾 **Convert to Excel format**
-        """)
-        
-        uploaded_file = st.file_uploader("Upload machine CSV file", type=['csv'])
-        
-        if uploaded_file:
-            try:
-                # Analyze the file first
-                st.subheader("🔍 File Analysis")
-                df, file_type = analyze_csv_file(uploaded_file)
-                
-                if df is not None and not df.empty:
-                    seal_type = "Main Seal" if file_type == 'main_seal' else "Separation Seal" if file_type == 'separation_seal' else "Unknown"
-                    
-                    if file_type != 'unknown':
-                        # Convert to technician format
-                        st.subheader("🔄 Conversion to Technician Format")
-                        technician_df = convert_machine_to_technician(df, file_type)
-                        
-                        if technician_df is not None:
-                            st.success(f"✅ Successfully converted {len(technician_df)} {seal_type} test steps!")
-                            
-                            # Show editable preview of converted data
-                            st.subheader("✏️ Editable Converted Data")
-                            edited_tech_df = editable_dataframe(technician_df, "csv_preview")
-                            
-                            # Show conversion summary
-                            col1, col2, col3 = st.columns(3)
-                            with col1:
-                                st.metric("Original Steps", len(df))
-                            with col2:
-                                st.metric("Converted Steps", len(edited_tech_df))
-                            with col3:
-                                st.metric("File Type", seal_type)
-                            
-                            # Create professional Excel for download
-                            st.subheader("💾 Download Excel")
-                            excel_output = create_professional_excel_from_data(edited_tech_df, file_type)
-                            
-                            if excel_output:
-                                st.download_button(
-                                    label="📥 Download Excel",
-                                    data=excel_output.getvalue(),
-                                    file_name=f"{file_type}_professional_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
-                                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                                )
-                    
-                    else:
-                        st.warning("⚠️ Could not automatically detect file type.")
-                        
-            except Exception as e:
-                st.error(f"❌ Error converting file: {str(e)}")
-    
+
+    # =====================================================
+    # VIEW CURRENT TEST
+    # =====================================================
+
     elif operation == "👀 View Current Test":
-        st.header("Current Test Sequence")
-        
-        # File selection
-        current_file = st.selectbox(
-            "Select file to view:",
+        st.header("View Current Test")
+
+        file_name = st.selectbox(
+            "Select Test File",
             ["MainSealSet2.csv", "SeperationSeal.csv", "SeperationSeal_Base.csv"]
         )
-        
-        try:
-            # Use safe reader to handle NaN/INF values
-            df = safe_read_csv(current_file)
-            file_type = detect_file_type(df)
-            
-            if file_type != 'unknown':
-                technician_df = convert_machine_to_technician(df, file_type)
-                seal_type = "Main Seal" if file_type == 'main_seal' else "Separation Seal"
-                
-                st.success(f"✅ Loaded {seal_type} test sequence with {len(df)} steps")
-                
-                # Display metrics
-                col1, col2, col3, col4 = st.columns(4)
-                with col1:
-                    st.metric("Total Steps", len(df))
-                with col2:
-                    if 'TST_TempDemand' in df.columns:
-                        temp_min = df['TST_TempDemand'].min()
-                        temp_max = df['TST_TempDemand'].max()
-                        st.metric("Temperature Range", f"{temp_min}°C - {temp_max}°C")
-                with col3:
-                    if 'TST_SpeedDem' in df.columns:
-                        max_speed = df['TST_SpeedDem'].max()
-                        st.metric("Max Speed", f"{max_speed} RPM")
-                with col4:
-                    if 'TST_APFlag' in df.columns:
-                        auto_steps = len(df[df['TST_APFlag'] == 1])
-                        st.metric("Auto Proceed Steps", auto_steps)
-                
-                # Display in editable technician-friendly format
-                st.subheader(f"✏️ Editable {seal_type} Test Sequence")
-                edited_tech_df = editable_dataframe(technician_df, "current_test_preview", height=500)
-                
-                # Download as Professional Excel button
-                st.subheader("💾 Download Current Test as Excel")
-                
-                # Create professional Excel file
-                excel_output = create_professional_excel_from_data(edited_tech_df, file_type)
-                
-                if excel_output:
-                    st.download_button(
-                        label="📥 Download as Excel",
-                        data=excel_output.getvalue(),
-                        file_name=f"current_{file_type}_test_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        help="Download this test sequence with Excel formatting"
-                    )
-        
-        except Exception as e:
-            st.error(f"❌ Could not load test sequence: {str(e)}")
-            st.info("Make sure the CSV file exists in the correct format.")
+
+        if (
+            "current_test_name" not in st.session_state
+            or st.session_state["current_test_name"] != file_name
+        ):
+            df = safe_read_csv(file_name)
+            st.session_state["current_test_df"] = df
+            st.session_state["current_test_name"] = file_name
+
+        df = st.session_state["current_test_df"]
+        file_type = detect_file_type(df)
+
+        tech_df = convert_machine_to_technician(df, file_type)
+        edited_df = editable_dataframe(tech_df, "current_test_editor", height=500)
+
+        st.success(f"Loaded {file_name} ({len(df)} steps)")
+
+# =========================================================
 
 if __name__ == "__main__":
     main()
