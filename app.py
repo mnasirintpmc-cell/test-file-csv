@@ -5,17 +5,17 @@ from datetime import datetime
 import numpy as np
 import math
 
-# =========================================================
+# =====================================================
 # SESSION HELPERS
-# =========================================================
+# =====================================================
 
 def reset_editor(key, df):
     if key not in st.session_state or st.session_state[key].shape != df.shape:
         st.session_state[key] = df.copy()
 
-# =========================================================
+# =====================================================
 # SAFE CSV READER
-# =========================================================
+# =====================================================
 
 def safe_read_csv(file_path_or_buffer):
     try:
@@ -38,9 +38,9 @@ def safe_read_csv(file_path_or_buffer):
         st.error(f"CSV read error: {e}")
         return pd.DataFrame()
 
-# =========================================================
+# =====================================================
 # FILE TYPE DETECTION
-# =========================================================
+# =====================================================
 
 def detect_file_type(df):
     cols = df.columns.tolist()
@@ -50,9 +50,9 @@ def detect_file_type(df):
         return 'separation_seal'
     return 'unknown'
 
-# =========================================================
-# COLUMN MAPPINGS (UNCHANGED)
-# =========================================================
+# =====================================================
+# COLUMN MAPPINGS
+# =====================================================
 
 def get_column_mapping(file_type):
     if file_type == 'main_seal':
@@ -88,51 +88,18 @@ def get_column_mapping(file_type):
                 'TST_TorqueCheck': 'Torque_Check'
             }
         }
-
-    if file_type == 'separation_seal':
-        return {
-            'technician_to_machine': {
-                'Speed_RPM': 'TST_SpeedDem',
-                'Sep_Seal_Flow_Set1': 'TST_SepSealFlwSet1',
-                'Sep_Seal_Flow_Set2': 'TST_SepSealFlwSet2',
-                'Sep_Seal_Pressure_Set1': 'TST_SepSealPSet1',
-                'Sep_Seal_Pressure_Set2': 'TST_SepSealPSet2',
-                'Sep_Seal_Control_Type': 'TST_SepSealControlTyp',
-                'Duration_s': 'TST_StepDuration',
-                'Auto_Proceed': 'TST_APFlag',
-                'Temperature_C': 'TST_TempDemand',
-                'Gas_Type': 'TST_GasType',
-                'Measurement': 'TST_MeasurementReq',
-                'Torque_Check': 'TST_TorqueCheck'
-            },
-            'machine_to_technician': {
-                'TST_SpeedDem': 'Speed_RPM',
-                'TST_SepSealFlwSet1': 'Sep_Seal_Flow_Set1',
-                'TST_SepSealFlwSet2': 'Sep_Seal_Flow_Set2',
-                'TST_SepSealPSet1': 'Sep_Seal_Pressure_Set1',
-                'TST_SepSealPSet2': 'Sep_Seal_Pressure_Set2',
-                'TST_SepSealControlTyp': 'Sep_Seal_Control_Type',
-                'TST_StepDuration': 'Duration_s',
-                'TST_APFlag': 'Auto_Proceed',
-                'TST_TempDemand': 'Temperature_C',
-                'TST_GasType': 'Gas_Type',
-                'TST_MeasurementReq': 'Measurement',
-                'TST_TorqueCheck': 'Torque_Check'
-            }
-        }
-
     return None
 
-# =========================================================
+# =====================================================
 # VALUE CONVERSIONS
-# =========================================================
+# =====================================================
 
 def convert_to_machine_codes(df, file_type):
     df = df.copy()
     for col in ['TST_APFlag','TST_MeasurementReq','TST_TorqueCheck']:
         if col in df.columns:
             df[col] = df[col].map({'Yes':1,'No':0}).fillna(0)
-    if file_type == 'main_seal' and 'TST_TestMode' in df.columns:
+    if 'TST_TestMode' in df.columns:
         df['TST_TestMode'] = df['TST_TestMode'].map({'Mode 1':1,'Mode 2':2}).fillna(1)
     return df
 
@@ -144,9 +111,9 @@ def convert_machine_to_technician(df, file_type):
         tech_df['Notes'] = ''
     return tech_df
 
-# =========================================================
+# =====================================================
 # EDITABLE DATAFRAME
-# =========================================================
+# =====================================================
 
 def editable_dataframe(df, key, height=500):
     reset_editor(key, df)
@@ -160,15 +127,11 @@ def editable_dataframe(df, key, height=500):
     st.session_state[key] = edited
     return edited
 
-# =========================================================
-# YOUR ORIGINAL TEMPLATE FUNCTION (WITH INSTRUCTIONS)
-# =========================================================
+# =====================================================
+# PROFESSIONAL EXCEL EXPORT (TEMPLATE + INSTRUCTIONS)
+# =====================================================
 
 def create_professional_excel_from_data(technician_df, file_type):
-    mapping = get_column_mapping(file_type)
-    if not mapping:
-        return None
-
     output = io.BytesIO()
 
     with pd.ExcelWriter(output, engine='xlsxwriter') as workbook:
@@ -185,7 +148,6 @@ def create_professional_excel_from_data(technician_df, file_type):
             'fg_color': '#366092',
             'font_color': 'white'
         })
-
         cell = wb.add_format({'border': 1, 'align': 'center'})
         notes = wb.add_format({'border': 1, 'align': 'left'})
 
@@ -199,24 +161,57 @@ def create_professional_excel_from_data(technician_df, file_type):
 
         ws.set_column(0, len(technician_df.columns)-1, 18)
 
+        # ================= INSTRUCTIONS =================
         instr = wb.add_worksheet('INSTRUCTIONS')
-        seal = "Main Seal" if file_type == 'main_seal' else "Separation Seal"
+        export_date = datetime.now().strftime('%Y-%m-%d')
 
-        instr.write(0, 0, f"{seal.upper()} TEST SEQUENCE")
-        instr.write(2, 0, "HOW TO USE THIS FILE:")
-        instr.write(3, 0, "1. Edit only white cells")
-        instr.write(4, 0, "2. Use dropdowns where provided")
-        instr.write(5, 0, "3. Do not rename columns")
-        instr.write(6, 0, "4. Upload back to the tool")
+        instructions = [
+            f"MAIN SEAL TEST SEQUENCE - EXPORTED {export_date}",
+            "",
+            "HOW TO USE THIS FILE:",
+            "1. This file contains your current test sequence",
+            "2. All cells have proper borders and formatting",
+            "3. Dropdown menus are included for standardized inputs",
+            "4. You can edit this file and upload it back to the web app",
+            "5. Use the conversion tool to generate machine CSV files",
+            "",
+            "FIELD DESCRIPTIONS:",
+            "Step: Sequential test step number (1, 2, 3...)",
+            "Speed_RPM: Rotational speed (0-3600 RPM)",
+            "Cell_Pressure_bar: Main chamber pressure (0.1-100 bar)",
+            "Interface_Pressure_bar: Interface pressure (0-40 bar)",
+            "BP_Drive_End_bar: Back pressure drive end (0-7 bar)",
+            "BP_Non_Drive_End_bar: Back pressure non-drive end (0-7 bar)",
+            "Gas_Injection_bar: Gas injection pressure (0-5 bar)",
+            "Duration_s: Step duration in seconds (1-300)",
+            "Auto_Proceed: Automatic step progression (Yes/No)",
+            "Temperature_C: Test temperature (30-155°C)",
+            "Gas_Type: Test gas type (Air/N2/He)",
+            "Test_Mode: Operating mode (Mode 1/Mode 2)",
+            "Measurement: Take measurements (Yes/No)",
+            "Torque_Check: Perform torque check (Yes/No)",
+            "Notes: Additional comments or observations"
+        ]
 
-        instr.set_column('A:A', 70)
+        title_fmt = wb.add_format({'bold': True, 'font_size': 14, 'font_color': '#366092'})
+        header_fmt = wb.add_format({'bold': True, 'font_color': '#366092'})
+
+        for r, text in enumerate(instructions):
+            if r == 0:
+                instr.write(r, 0, text, title_fmt)
+            elif text in ["HOW TO USE THIS FILE:", "FIELD DESCRIPTIONS:"]:
+                instr.write(r, 0, text, header_fmt)
+            else:
+                instr.write(r, 0, text)
+
+        instr.set_column('A:A', 75)
 
     output.seek(0)
     return output
 
-# =========================================================
+# =====================================================
 # MAIN APP
-# =========================================================
+# =====================================================
 
 def main():
     st.title("⚙️ Universal Seal Test Manager")
@@ -253,6 +248,7 @@ def main():
         if uploaded:
             df = safe_read_csv(uploaded)
             file_type = detect_file_type(df)
+
             tech_df = convert_machine_to_technician(df, file_type)
             edited = editable_dataframe(tech_df, "csv_editor")
 
@@ -266,7 +262,7 @@ def main():
 
     elif operation == "👀 View Current Test":
         file_name = st.selectbox(
-            "Select CSV",
+            "Select test CSV",
             ["MainSealSet2.csv","SeperationSeal.csv","SeperationSeal_Base.csv"]
         )
 
