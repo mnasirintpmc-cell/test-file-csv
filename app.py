@@ -9,10 +9,6 @@ import math
 # SESSION HELPERS
 # =========================================================
 
-def persist(key, value):
-    if value is not None:
-        st.session_state[key] = value
-
 def reset_editor(key, df):
     if key not in st.session_state or st.session_state[key].shape != df.shape:
         st.session_state[key] = df.copy()
@@ -136,7 +132,7 @@ def convert_to_machine_codes(df, file_type):
     for col in ['TST_APFlag','TST_MeasurementReq','TST_TorqueCheck']:
         if col in df.columns:
             df[col] = df[col].map({'Yes':1,'No':0}).fillna(0)
-    if 'TST_TestMode' in df.columns:
+    if file_type == 'main_seal' and 'TST_TestMode' in df.columns:
         df['TST_TestMode'] = df['TST_TestMode'].map({'Mode 1':1,'Mode 2':2}).fillna(1)
     return df
 
@@ -149,7 +145,7 @@ def convert_machine_to_technician(df, file_type):
     return tech_df
 
 # =========================================================
-# EDITABLE TABLE
+# EDITABLE DATAFRAME
 # =========================================================
 
 def editable_dataframe(df, key, height=500):
@@ -165,23 +161,31 @@ def editable_dataframe(df, key, height=500):
     return edited
 
 # =========================================================
-# PROFESSIONAL EXCEL EXPORT (YOUR TEMPLATE)
+# YOUR ORIGINAL TEMPLATE FUNCTION (WITH INSTRUCTIONS)
 # =========================================================
 
 def create_professional_excel_from_data(technician_df, file_type):
-    # <<< THIS IS YOUR ORIGINAL FUNCTION — UNCHANGED >>>
-    # (kept exactly as you wrote it previously)
-    # ⬇⬇⬇
+    mapping = get_column_mapping(file_type)
+    if not mapping:
+        return None
+
     output = io.BytesIO()
+
     with pd.ExcelWriter(output, engine='xlsxwriter') as workbook:
         technician_df.to_excel(workbook, sheet_name='TEST_SEQUENCE', index=False)
-        ws = workbook.sheets['TEST_SEQUENCE']
+
         wb = workbook.book
+        ws = workbook.sheets['TEST_SEQUENCE']
 
         header = wb.add_format({
-            'bold': True, 'align': 'center', 'border': 1,
-            'fg_color': '#366092', 'font_color': 'white'
+            'bold': True,
+            'text_wrap': True,
+            'align': 'center',
+            'border': 1,
+            'fg_color': '#366092',
+            'font_color': 'white'
         })
+
         cell = wb.add_format({'border': 1, 'align': 'center'})
         notes = wb.add_format({'border': 1, 'align': 'left'})
 
@@ -196,8 +200,16 @@ def create_professional_excel_from_data(technician_df, file_type):
         ws.set_column(0, len(technician_df.columns)-1, 18)
 
         instr = wb.add_worksheet('INSTRUCTIONS')
-        instr.write(0, 0, f"{file_type.upper()} TEST SEQUENCE")
-        instr.set_column('A:A', 60)
+        seal = "Main Seal" if file_type == 'main_seal' else "Separation Seal"
+
+        instr.write(0, 0, f"{seal.upper()} TEST SEQUENCE")
+        instr.write(2, 0, "HOW TO USE THIS FILE:")
+        instr.write(3, 0, "1. Edit only white cells")
+        instr.write(4, 0, "2. Use dropdowns where provided")
+        instr.write(5, 0, "3. Do not rename columns")
+        instr.write(6, 0, "4. Upload back to the tool")
+
+        instr.set_column('A:A', 70)
 
     output.seek(0)
     return output
@@ -214,19 +226,16 @@ def main():
         ["🔄 Excel to Machine CSV", "📤 Machine CSV to Excel", "👀 View Current Test"]
     )
 
-    # ===================== EXCEL → CSV =====================
     if operation == "🔄 Excel to Machine CSV":
-        uploaded = st.file_uploader("Upload Excel", type=['xlsx'])
-        persist("excel_file", uploaded)
-
-        if "excel_file" in st.session_state:
-            df = pd.read_excel(st.session_state["excel_file"], sheet_name='TEST_SEQUENCE')
+        uploaded = st.file_uploader("Upload Excel Template", type=['xlsx'])
+        if uploaded:
+            df = pd.read_excel(uploaded, sheet_name='TEST_SEQUENCE')
             df = df.dropna(subset=['Step']).reset_index(drop=True)
             file_type = detect_file_type(df)
-            mapping = get_column_mapping(file_type)
 
             edited = editable_dataframe(df, "excel_editor")
 
+            mapping = get_column_mapping(file_type)
             rename = {k:v for k,v in mapping['technician_to_machine'].items() if k in edited.columns}
             machine_df = edited.rename(columns=rename)
             machine_df = convert_to_machine_codes(machine_df, file_type)
@@ -239,15 +248,11 @@ def main():
                 mime="text/csv"
             )
 
-    # ===================== CSV → EXCEL =====================
     elif operation == "📤 Machine CSV to Excel":
         uploaded = st.file_uploader("Upload Machine CSV", type=['csv'])
-        persist("csv_file", uploaded)
-
-        if "csv_file" in st.session_state:
-            df = safe_read_csv(st.session_state["csv_file"])
+        if uploaded:
+            df = safe_read_csv(uploaded)
             file_type = detect_file_type(df)
-
             tech_df = convert_machine_to_technician(df, file_type)
             edited = editable_dataframe(tech_df, "csv_editor")
 
@@ -259,10 +264,9 @@ def main():
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
 
-    # ===================== VIEW CURRENT =====================
     elif operation == "👀 View Current Test":
         file_name = st.selectbox(
-            "Select test CSV",
+            "Select CSV",
             ["MainSealSet2.csv","SeperationSeal.csv","SeperationSeal_Base.csv"]
         )
 
@@ -272,7 +276,6 @@ def main():
 
         df = st.session_state["current_df"]
         file_type = detect_file_type(df)
-
         tech_df = convert_machine_to_technician(df, file_type)
         edited = editable_dataframe(tech_df, "current_editor")
 
@@ -300,8 +303,6 @@ def main():
                 file_name=f"current_{file_type}_test.csv",
                 mime="text/csv"
             )
-
-# =========================================================
 
 if __name__ == "__main__":
     main()
