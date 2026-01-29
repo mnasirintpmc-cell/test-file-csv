@@ -6,10 +6,7 @@ import numpy as np
 import math
 
 # ================= TEMPLATE UTILITIES =================
-from template_utils import (
-    create_smart_template,
-    create_example_sequence
-)
+from template_utils import create_smart_template
 
 # =====================================================
 # SESSION HELPERS
@@ -142,7 +139,6 @@ def create_professional_excel_from_data(technician_df, file_type):
 
     with pd.ExcelWriter(output, engine='xlsxwriter') as workbook:
         technician_df.to_excel(workbook, sheet_name='TEST_SEQUENCE', index=False)
-
         wb = workbook.book
         ws = workbook.sheets['TEST_SEQUENCE']
 
@@ -164,7 +160,6 @@ def create_professional_excel_from_data(technician_df, file_type):
 
         instr = wb.add_worksheet('INSTRUCTIONS')
         date = datetime.now().strftime('%Y-%m-%d')
-
         seal_title = "MAIN SEAL" if file_type == "main_seal" else "SEPARATION SEAL"
 
         instructions = [
@@ -220,11 +215,10 @@ def main():
 
         st.info(f"🧩 Template Seal Type: **{seal_ui.upper()}**")
 
-        machine_df = (
-            create_smart_template()
-            if file_type == "main_seal"
-            else create_example_sequence()
-        )
+        if file_type == "main_seal":
+            machine_df = create_smart_template()
+        else:
+            machine_df = safe_read_csv("SeperationSeal.csv")
 
         tech_df = convert_machine_to_technician(machine_df, file_type)
         excel = create_professional_excel_from_data(tech_df, file_type)
@@ -247,7 +241,6 @@ def main():
             st.info(f"🔄 Converting: **{file_type.replace('_',' ').upper()}**")
 
             edited = editable_dataframe(df, "excel_editor")
-
             mapping = get_column_mapping(file_type)
             rename = {k:v for k,v in mapping['technician_to_machine'].items() if k in edited.columns}
             machine_df = convert_to_machine_codes(edited.rename(columns=rename), file_type)
