@@ -134,13 +134,15 @@ def editable_dataframe(df, key, height=500):
     return edited
 
 # =====================================================
-# PROFESSIONAL EXCEL EXPORT (UNCHANGED)
+# PROFESSIONAL EXCEL EXPORT
 # =====================================================
 
 def create_professional_excel_from_data(technician_df, file_type):
     output = io.BytesIO()
+
     with pd.ExcelWriter(output, engine='xlsxwriter') as workbook:
         technician_df.to_excel(workbook, sheet_name='TEST_SEQUENCE', index=False)
+
         wb = workbook.book
         ws = workbook.sheets['TEST_SEQUENCE']
 
@@ -163,8 +165,10 @@ def create_professional_excel_from_data(technician_df, file_type):
         instr = wb.add_worksheet('INSTRUCTIONS')
         date = datetime.now().strftime('%Y-%m-%d')
 
+        seal_title = "MAIN SEAL" if file_type == "main_seal" else "SEPARATION SEAL"
+
         instructions = [
-            f"MAIN SEAL TEST SEQUENCE - EXPORTED {date}",
+            f"{seal_title} TEST SEQUENCE - EXPORTED {date}",
             "",
             "HOW TO USE THIS FILE:",
             "1. This file contains your current test sequence",
@@ -180,7 +184,12 @@ def create_professional_excel_from_data(technician_df, file_type):
         header_fmt = wb.add_format({'bold': True,'font_color': '#366092'})
 
         for r,text in enumerate(instructions):
-            instr.write(r,0,text,title_fmt if r==0 else header_fmt if text.endswith(':') else None)
+            if r == 0:
+                instr.write(r,0,text,title_fmt)
+            elif text.endswith(":"):
+                instr.write(r,0,text,header_fmt)
+            else:
+                instr.write(r,0,text)
 
         instr.set_column('A:A',75)
 
@@ -204,37 +213,39 @@ def main():
         ]
     )
 
-    # ============ DOWNLOAD TEMPLATE (NEW, SAFE) ============
+    # ================= DOWNLOAD TEMPLATE =================
     if operation == "📥 Download Template":
-        template_type = st.selectbox(
-            "Template Type",
-            ["Smart Blank Template","Example Test Sequence"]
-        )
+        seal_ui = st.selectbox("Select Seal Type", ["Main Seal", "Separation Seal"])
+        file_type = "main_seal" if seal_ui == "Main Seal" else "separation_seal"
+
+        st.info(f"🧩 Template Seal Type: **{seal_ui.upper()}**")
 
         machine_df = (
             create_smart_template()
-            if template_type == "Smart Blank Template"
+            if file_type == "main_seal"
             else create_example_sequence()
         )
 
-        file_type = detect_file_type(machine_df)
         tech_df = convert_machine_to_technician(machine_df, file_type)
         excel = create_professional_excel_from_data(tech_df, file_type)
 
         st.download_button(
-            "📥 Download Excel Template",
+            f"📥 Download {seal_ui} Excel Template",
             excel.getvalue(),
             file_name=f"{file_type}_template.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
 
-    # ============ ORIGINAL FEATURES (UNCHANGED) ============
+    # ================= EXCEL → CSV =================
     elif operation == "🔄 Excel to Machine CSV":
         uploaded = st.file_uploader("Upload Excel Template", type=['xlsx'])
         if uploaded:
             df = pd.read_excel(uploaded, sheet_name='TEST_SEQUENCE')
             df = df.dropna(subset=['Step']).reset_index(drop=True)
             file_type = detect_file_type(df)
+
+            st.info(f"🔄 Converting: **{file_type.replace('_',' ').upper()}**")
+
             edited = editable_dataframe(df, "excel_editor")
 
             mapping = get_column_mapping(file_type)
@@ -249,11 +260,15 @@ def main():
                 mime="text/csv"
             )
 
+    # ================= CSV → EXCEL =================
     elif operation == "📤 Machine CSV to Excel":
         uploaded = st.file_uploader("Upload Machine CSV", type=['csv'])
         if uploaded:
             df = safe_read_csv(uploaded)
             file_type = detect_file_type(df)
+
+            st.info(f"📤 Detected Seal Type: **{file_type.replace('_',' ').upper()}**")
+
             edited = editable_dataframe(convert_machine_to_technician(df, file_type), "csv_editor")
             excel = create_professional_excel_from_data(edited, file_type)
 
@@ -264,6 +279,7 @@ def main():
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
 
+    # ================= VIEW CURRENT =================
     elif operation == "👀 View Current Test":
         file_name = st.selectbox(
             "Select test CSV",
@@ -276,6 +292,9 @@ def main():
 
         df = st.session_state["current_df"]
         file_type = detect_file_type(df)
+
+        st.success(f"👀 Viewing: **{file_type.replace('_',' ').upper()}** test")
+
         edited = editable_dataframe(convert_machine_to_technician(df, file_type), "current_editor")
 
         col1, col2 = st.columns(2)
@@ -283,7 +302,7 @@ def main():
         with col1:
             excel = create_professional_excel_from_data(edited, file_type)
             st.download_button(
-                "📥 Download Excel (Template)",
+                "📥 Download Excel",
                 excel.getvalue(),
                 file_name=f"current_{file_type}_test.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
