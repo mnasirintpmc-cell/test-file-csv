@@ -51,62 +51,84 @@ def detect_file_type(df):
     return 'unknown'
 
 # =====================================================
-# COLUMN MAPPINGS
+# COLUMN MAPPINGS + TEMPLATE DATA
 # =====================================================
 
 def get_column_mapping(file_type):
     if file_type == 'main_seal':
         return {
+            'headers': [
+                'Step','Speed_RPM','Cell_Pressure_bar','Interface_Pressure_bar',
+                'BP_Drive_End_bar','BP_Non_Drive_End_bar','Gas_Injection_bar',
+                'Duration_s','Auto_Proceed','Temperature_C','Gas_Type',
+                'Test_Mode','Measurement','Torque_Check','Notes'
+            ],
+            'sample_data': [
+                [1,0,0.21,0,0,0,0,2,'No',30,'Air','Mode 1','Yes','No','Initial test'],
+                [2,3600,10,0,1,1,0,10,'Yes',155,'Air','Mode 1','Yes','No','High speed test']
+            ],
             'technician_to_machine': {
-                'Speed_RPM': 'TST_SpeedDem',
-                'Cell_Pressure_bar': 'TST_CellPresDemand',
-                'Interface_Pressure_bar': 'TST_InterPresDemand',
-                'BP_Drive_End_bar': 'TST_InterBPDemand_DE',
-                'BP_Non_Drive_End_bar': 'TST_InterBPDemand_NDE',
-                'Gas_Injection_bar': 'TST_GasInjectionDemand',
-                'Duration_s': 'TST_StepDuration',
-                'Auto_Proceed': 'TST_APFlag',
-                'Temperature_C': 'TST_TempDemand',
-                'Gas_Type': 'TST_GasType',
-                'Test_Mode': 'TST_TestMode',
-                'Measurement': 'TST_MeasurementReq',
-                'Torque_Check': 'TST_TorqueCheck'
-            },
-            'machine_to_technician': {
-                'TST_SpeedDem': 'Speed_RPM',
-                'TST_CellPresDemand': 'Cell_Pressure_bar',
-                'TST_InterPresDemand': 'Interface_Pressure_bar',
-                'TST_InterBPDemand_DE': 'BP_Drive_End_bar',
-                'TST_InterBPDemand_NDE': 'BP_Non_Drive_End_bar',
-                'TST_GasInjectionDemand': 'Gas_Injection_bar',
-                'TST_StepDuration': 'Duration_s',
-                'TST_APFlag': 'Auto_Proceed',
-                'TST_TempDemand': 'Temperature_C',
-                'TST_GasType': 'Gas_Type',
-                'TST_TestMode': 'Test_Mode',
-                'TST_MeasurementReq': 'Measurement',
-                'TST_TorqueCheck': 'Torque_Check'
+                'Speed_RPM':'TST_SpeedDem',
+                'Cell_Pressure_bar':'TST_CellPresDemand',
+                'Interface_Pressure_bar':'TST_InterPresDemand',
+                'BP_Drive_End_bar':'TST_InterBPDemand_DE',
+                'BP_Non_Drive_End_bar':'TST_InterBPDemand_NDE',
+                'Gas_Injection_bar':'TST_GasInjectionDemand',
+                'Duration_s':'TST_StepDuration',
+                'Auto_Proceed':'TST_APFlag',
+                'Temperature_C':'TST_TempDemand',
+                'Gas_Type':'TST_GasType',
+                'Test_Mode':'TST_TestMode',
+                'Measurement':'TST_MeasurementReq',
+                'Torque_Check':'TST_TorqueCheck'
             }
         }
+
+    if file_type == 'separation_seal':
+        return {
+            'headers': [
+                'Step','Speed_RPM','Sep_Seal_Flow_Set1','Sep_Seal_Flow_Set2',
+                'Sep_Seal_Pressure_Set1','Sep_Seal_Pressure_Set2',
+                'Sep_Seal_Control_Type','Duration_s','Auto_Proceed',
+                'Temperature_C','Gas_Type','Measurement','Torque_Check','Notes'
+            ],
+            'sample_data': [
+                [1,0,47.5,0,1,0,0,2,'No',100,'Air','Yes','No','Initial test'],
+                [2,16550,47.5,0,1,0,0,10,'Yes',100,'Air','Yes','No','Max speed test']
+            ],
+            'technician_to_machine': {
+                'Speed_RPM':'TST_SpeedDem',
+                'Sep_Seal_Flow_Set1':'TST_SepSealFlwSet1',
+                'Sep_Seal_Flow_Set2':'TST_SepSealFlwSet2',
+                'Sep_Seal_Pressure_Set1':'TST_SepSealPSet1',
+                'Sep_Seal_Pressure_Set2':'TST_SepSealPSet2',
+                'Sep_Seal_Control_Type':'TST_SepSealControlTyp',
+                'Duration_s':'TST_StepDuration',
+                'Auto_Proceed':'TST_APFlag',
+                'Temperature_C':'TST_TempDemand',
+                'Gas_Type':'TST_GasType',
+                'Measurement':'TST_MeasurementReq',
+                'Torque_Check':'TST_TorqueCheck'
+            }
+        }
+
     return None
 
 # =====================================================
-# VALUE CONVERSIONS
+# MACHINE ↔ TECH CONVERSION
 # =====================================================
 
-def convert_to_machine_codes(df, file_type):
+def convert_to_machine_codes(df):
     df = df.copy()
-    for col in ['TST_APFlag','TST_MeasurementReq','TST_TorqueCheck']:
-        if col in df.columns:
+    for col in df.columns:
+        if col in ['Auto_Proceed','Measurement','Torque_Check']:
             df[col] = df[col].map({'Yes':1,'No':0}).fillna(0)
-    if 'TST_TestMode' in df.columns:
-        df['TST_TestMode'] = df['TST_TestMode'].map({'Mode 1':1,'Mode 2':2}).fillna(1)
     return df
 
 def convert_machine_to_technician(df, file_type):
     mapping = get_column_mapping(file_type)
-    tech_df = df.rename(columns=mapping['machine_to_technician'])
-    tech_df.insert(0, 'Step', range(1, len(tech_df)+1))
+    tech_df = df.rename(columns={v:k for k,v in mapping['technician_to_machine'].items()})
+    tech_df.insert(0,'Step',range(1,len(tech_df)+1))
     if 'Notes' not in tech_df.columns:
         tech_df['Notes'] = ''
     return tech_df
@@ -128,7 +150,7 @@ def editable_dataframe(df, key, height=500):
     return edited
 
 # =====================================================
-# PROFESSIONAL EXCEL EXPORT (TEMPLATE + INSTRUCTIONS)
+# PROFESSIONAL EXCEL EXPORT (WITH INSTRUCTIONS)
 # =====================================================
 
 def create_professional_excel_from_data(technician_df, file_type):
@@ -136,38 +158,33 @@ def create_professional_excel_from_data(technician_df, file_type):
 
     with pd.ExcelWriter(output, engine='xlsxwriter') as workbook:
         technician_df.to_excel(workbook, sheet_name='TEST_SEQUENCE', index=False)
-
         wb = workbook.book
         ws = workbook.sheets['TEST_SEQUENCE']
 
         header = wb.add_format({
-            'bold': True,
-            'text_wrap': True,
-            'align': 'center',
-            'border': 1,
-            'fg_color': '#366092',
-            'font_color': 'white'
+            'bold': True,'align':'center','border':1,
+            'fg_color':'#366092','font_color':'white'
         })
-        cell = wb.add_format({'border': 1, 'align': 'center'})
-        notes = wb.add_format({'border': 1, 'align': 'left'})
+        cell = wb.add_format({'border':1,'align':'center'})
+        notes = wb.add_format({'border':1,'align':'left'})
 
-        for c, col in enumerate(technician_df.columns):
-            ws.write(0, c, col, header)
+        for c,col in enumerate(technician_df.columns):
+            ws.write(0,c,col,header)
 
-        for r in range(1, len(technician_df)+1):
-            for c, col in enumerate(technician_df.columns):
-                fmt = notes if col == 'Notes' else cell
-                ws.write(r, c, technician_df.iloc[r-1, c], fmt)
+        for r in range(1,len(technician_df)+1):
+            for c,col in enumerate(technician_df.columns):
+                fmt = notes if col=='Notes' else cell
+                ws.write(r,c,technician_df.iloc[r-1,c],fmt)
 
-        ws.set_column(0, len(technician_df.columns)-1, 18)
+        ws.set_column(0,len(technician_df.columns)-1,18)
 
-        # ================= INSTRUCTIONS =================
         instr = wb.add_worksheet('INSTRUCTIONS')
-        export_date = datetime.now().strftime('%Y-%m-%d')
+        date = datetime.now().strftime('%Y-%m-%d')
+
+        title = f"{'MAIN SEAL' if file_type=='main_seal' else 'SEPARATION SEAL'} TEST SEQUENCE - EXPORTED {date}"
 
         instructions = [
-            f"MAIN SEAL TEST SEQUENCE - EXPORTED {export_date}",
-            "",
+            title,"",
             "HOW TO USE THIS FILE:",
             "1. This file contains your current test sequence",
             "2. All cells have proper borders and formatting",
@@ -175,36 +192,21 @@ def create_professional_excel_from_data(technician_df, file_type):
             "4. You can edit this file and upload it back to the web app",
             "5. Use the conversion tool to generate machine CSV files",
             "",
-            "FIELD DESCRIPTIONS:",
-            "Step: Sequential test step number (1, 2, 3...)",
-            "Speed_RPM: Rotational speed (0-3600 RPM)",
-            "Cell_Pressure_bar: Main chamber pressure (0.1-100 bar)",
-            "Interface_Pressure_bar: Interface pressure (0-40 bar)",
-            "BP_Drive_End_bar: Back pressure drive end (0-7 bar)",
-            "BP_Non_Drive_End_bar: Back pressure non-drive end (0-7 bar)",
-            "Gas_Injection_bar: Gas injection pressure (0-5 bar)",
-            "Duration_s: Step duration in seconds (1-300)",
-            "Auto_Proceed: Automatic step progression (Yes/No)",
-            "Temperature_C: Test temperature (30-155°C)",
-            "Gas_Type: Test gas type (Air/N2/He)",
-            "Test_Mode: Operating mode (Mode 1/Mode 2)",
-            "Measurement: Take measurements (Yes/No)",
-            "Torque_Check: Perform torque check (Yes/No)",
-            "Notes: Additional comments or observations"
-        ]
+            "FIELD DESCRIPTIONS:"
+        ] + [f"{c}: Field description" for c in technician_df.columns]
 
-        title_fmt = wb.add_format({'bold': True, 'font_size': 14, 'font_color': '#366092'})
-        header_fmt = wb.add_format({'bold': True, 'font_color': '#366092'})
+        title_fmt = wb.add_format({'bold':True,'font_size':14,'font_color':'#366092'})
+        header_fmt = wb.add_format({'bold':True,'font_color':'#366092'})
 
-        for r, text in enumerate(instructions):
-            if r == 0:
-                instr.write(r, 0, text, title_fmt)
-            elif text in ["HOW TO USE THIS FILE:", "FIELD DESCRIPTIONS:"]:
-                instr.write(r, 0, text, header_fmt)
+        for r,text in enumerate(instructions):
+            if r==0:
+                instr.write(r,0,text,title_fmt)
+            elif text in ["HOW TO USE THIS FILE:","FIELD DESCRIPTIONS:"]:
+                instr.write(r,0,text,header_fmt)
             else:
-                instr.write(r, 0, text)
+                instr.write(r,0,text)
 
-        instr.set_column('A:A', 75)
+        instr.set_column('A:A',75)
 
     output.seek(0)
     return output
@@ -218,87 +220,56 @@ def main():
 
     operation = st.sidebar.radio(
         "Operation",
-        ["🔄 Excel to Machine CSV", "📤 Machine CSV to Excel", "👀 View Current Test"]
+        [
+            "📥 Download Template",
+            "🔄 Excel to Machine CSV",
+            "📤 Machine CSV to Excel",
+            "👀 View Current Test"
+        ]
     )
 
-    if operation == "🔄 Excel to Machine CSV":
-        uploaded = st.file_uploader("Upload Excel Template", type=['xlsx'])
-        if uploaded:
-            df = pd.read_excel(uploaded, sheet_name='TEST_SEQUENCE')
-            df = df.dropna(subset=['Step']).reset_index(drop=True)
-            file_type = detect_file_type(df)
+    # ================= TEMPLATE DOWNLOAD =================
+    if operation == "📥 Download Template":
+        seal = st.selectbox("Select Seal Type",["Main Seal","Separation Seal"])
+        file_type = 'main_seal' if seal=="Main Seal" else 'separation_seal'
 
-            edited = editable_dataframe(df, "excel_editor")
+        mapping = get_column_mapping(file_type)
+        df = pd.DataFrame(mapping['sample_data'],columns=mapping['headers'])
+        excel = create_professional_excel_from_data(df,file_type)
 
-            mapping = get_column_mapping(file_type)
-            rename = {k:v for k,v in mapping['technician_to_machine'].items() if k in edited.columns}
-            machine_df = edited.rename(columns=rename)
-            machine_df = convert_to_machine_codes(machine_df, file_type)
-            machine_df = machine_df.drop(columns=[c for c in ['Step','Notes'] if c in machine_df.columns])
-
-            st.download_button(
-                "📥 Download Machine CSV",
-                machine_df.to_csv(index=False, sep=';'),
-                file_name=f"{file_type}_sequence.csv",
-                mime="text/csv"
-            )
-
-    elif operation == "📤 Machine CSV to Excel":
-        uploaded = st.file_uploader("Upload Machine CSV", type=['csv'])
-        if uploaded:
-            df = safe_read_csv(uploaded)
-            file_type = detect_file_type(df)
-
-            tech_df = convert_machine_to_technician(df, file_type)
-            edited = editable_dataframe(tech_df, "csv_editor")
-
-            excel = create_professional_excel_from_data(edited, file_type)
-            st.download_button(
-                "📥 Download Excel",
-                excel.getvalue(),
-                file_name=f"{file_type}_professional.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
-
-    elif operation == "👀 View Current Test":
-        file_name = st.selectbox(
-            "Select test CSV",
-            ["MainSealSet2.csv","SeperationSeal.csv","SeperationSeal_Base.csv"]
+        st.download_button(
+            f"📥 Download {seal} Template",
+            excel.getvalue(),
+            file_name=f"{file_type}_template.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
 
-        if "current_name" not in st.session_state or st.session_state["current_name"] != file_name:
-            st.session_state["current_df"] = safe_read_csv(file_name)
-            st.session_state["current_name"] = file_name
-
-        df = st.session_state["current_df"]
-        file_type = detect_file_type(df)
-        tech_df = convert_machine_to_technician(df, file_type)
-        edited = editable_dataframe(tech_df, "current_editor")
-
-        col1, col2 = st.columns(2)
-
-        with col1:
-            excel = create_professional_excel_from_data(edited, file_type)
-            st.download_button(
-                "📥 Download Excel (Template)",
-                excel.getvalue(),
-                file_name=f"current_{file_type}_test.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
-
-        with col2:
-            mapping = get_column_mapping(file_type)
-            rename = {k:v for k,v in mapping['technician_to_machine'].items() if k in edited.columns}
+    # ================= EXCEL → CSV =================
+    elif operation == "🔄 Excel to Machine CSV":
+        uploaded = st.file_uploader("Upload Excel",type=['xlsx'])
+        if uploaded:
+            df = pd.read_excel(uploaded,sheet_name='TEST_SEQUENCE')
+            edited = editable_dataframe(df,"excel_editor")
+            mapping = get_column_mapping(detect_file_type(df))
+            rename = mapping['technician_to_machine']
             machine_df = edited.rename(columns=rename)
-            machine_df = convert_to_machine_codes(machine_df, file_type)
+            machine_df = convert_to_machine_codes(machine_df)
             machine_df = machine_df.drop(columns=[c for c in ['Step','Notes'] if c in machine_df.columns])
+            st.download_button("📥 Download Machine CSV",machine_df.to_csv(index=False,sep=';'))
 
-            st.download_button(
-                "📥 Download Machine CSV",
-                machine_df.to_csv(index=False, sep=';'),
-                file_name=f"current_{file_type}_test.csv",
-                mime="text/csv"
-            )
+    # ================= CSV → EXCEL =================
+    elif operation == "📤 Machine CSV to Excel":
+        uploaded = st.file_uploader("Upload Machine CSV",type=['csv'])
+        if uploaded:
+            df = safe_read_csv(uploaded)
+            tech_df = convert_machine_to_technician(df,detect_file_type(df))
+            edited = editable_dataframe(tech_df,"csv_editor")
+            excel = create_professional_excel_from_data(edited,detect_file_type(df))
+            st.download_button("📥 Download Excel",excel.getvalue())
+
+    # ================= VIEW CURRENT =================
+    elif operation == "👀 View Current Test":
+        st.info("Load, edit, and export existing test files")
 
 if __name__ == "__main__":
     main()
