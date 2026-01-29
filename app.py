@@ -51,10 +51,11 @@ def detect_file_type(df):
     return 'unknown'
 
 # =====================================================
-# COLUMN MAPPINGS
+# COLUMN MAPPINGS (FIXED)
 # =====================================================
 
 def get_column_mapping(file_type):
+
     if file_type == 'main_seal':
         return {
             'technician_to_machine': {
@@ -88,6 +89,39 @@ def get_column_mapping(file_type):
                 'TST_TorqueCheck': 'Torque_Check'
             }
         }
+
+    if file_type == 'separation_seal':
+        return {
+            'technician_to_machine': {
+                'Speed_RPM': 'TST_SpeedDem',
+                'Sep_Seal_Flow_Set1': 'TST_SepSealFlwSet1',
+                'Sep_Seal_Flow_Set2': 'TST_SepSealFlwSet2',
+                'Sep_Seal_Pressure_Set1': 'TST_SepSealPSet1',
+                'Sep_Seal_Pressure_Set2': 'TST_SepSealPSet2',
+                'Sep_Seal_Control_Type': 'TST_SepSealControlTyp',
+                'Duration_s': 'TST_StepDuration',
+                'Auto_Proceed': 'TST_APFlag',
+                'Temperature_C': 'TST_TempDemand',
+                'Gas_Type': 'TST_GasType',
+                'Measurement': 'TST_MeasurementReq',
+                'Torque_Check': 'TST_TorqueCheck'
+            },
+            'machine_to_technician': {
+                'TST_SpeedDem': 'Speed_RPM',
+                'TST_SepSealFlwSet1': 'Sep_Seal_Flow_Set1',
+                'TST_SepSealFlwSet2': 'Sep_Seal_Flow_Set2',
+                'TST_SepSealPSet1': 'Sep_Seal_Pressure_Set1',
+                'TST_SepSealPSet2': 'Sep_Seal_Pressure_Set2',
+                'TST_SepSealControlTyp': 'Sep_Seal_Control_Type',
+                'TST_StepDuration': 'Duration_s',
+                'TST_APFlag': 'Auto_Proceed',
+                'TST_TempDemand': 'Temperature_C',
+                'TST_GasType': 'Gas_Type',
+                'TST_MeasurementReq': 'Measurement',
+                'TST_TorqueCheck': 'Torque_Check'
+            }
+        }
+
     return None
 
 # =====================================================
@@ -105,6 +139,10 @@ def convert_to_machine_codes(df, file_type):
 
 def convert_machine_to_technician(df, file_type):
     mapping = get_column_mapping(file_type)
+    if mapping is None:
+        st.error("Unsupported seal type")
+        return pd.DataFrame()
+
     tech_df = df.rename(columns=mapping['machine_to_technician'])
     tech_df.insert(0, 'Step', range(1, len(tech_df)+1))
     if 'Notes' not in tech_df.columns:
@@ -225,7 +263,7 @@ def main():
         ]
     )
 
-    # ============ DOWNLOAD TEMPLATE ============
+    # -------- DOWNLOAD TEMPLATE --------
     if operation == "📥 Download Template":
         seal = st.selectbox("Select Seal Type", ["Main Seal", "Separation Seal"])
 
@@ -248,7 +286,7 @@ def main():
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
 
-    # ============ EXCEL → CSV ============
+    # -------- EXCEL → CSV --------
     elif operation == "🔄 Excel to Machine CSV":
         uploaded = st.file_uploader("Upload Excel Template", type=['xlsx'])
         if uploaded:
@@ -270,7 +308,7 @@ def main():
                 mime="text/csv"
             )
 
-    # ============ CSV → EXCEL ============
+    # -------- CSV → EXCEL --------
     elif operation == "📤 Machine CSV to Excel":
         uploaded = st.file_uploader("Upload Machine CSV", type=['csv'])
         if uploaded:
@@ -289,7 +327,7 @@ def main():
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
 
-    # ============ VIEW CURRENT ============
+    # -------- VIEW CURRENT --------
     elif operation == "👀 View Current Test":
         seal = st.selectbox("Select Seal Type", ["Main Seal", "Separation Seal"])
 
