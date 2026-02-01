@@ -138,7 +138,7 @@ def convert_to_machine_codes(df):
     return df
 
 # =====================================================
-# EDITABLE DATAFRAME (STABLE)
+# EDITABLE DATAFRAME (FORM-BASED – NO RERUNS)
 # =====================================================
 
 def editable_dataframe(df, key, height=500):
@@ -146,16 +146,22 @@ def editable_dataframe(df, key, height=500):
     if key not in st.session_state:
         st.session_state[key] = df.copy()
 
-    edited = st.data_editor(
-        st.session_state[key],
-        key=f"editor_{key}",
-        use_container_width=True,
-        height=height,
-        num_rows="fixed"   # 🔒 STABLE MODE
-    )
+    with st.form(f"form_{key}"):
 
-    st.session_state[key] = edited
-    return edited
+        edited = st.data_editor(
+            st.session_state[key],
+            use_container_width=True,
+            height=height,
+            num_rows="fixed"
+        )
+
+        submitted = st.form_submit_button("✅ Apply changes")
+
+    if submitted:
+        st.session_state[key] = edited
+        st.success("Changes applied")
+
+    return st.session_state[key]
 
 # =====================================================
 # PROFESSIONAL EXCEL EXPORT (UNCHANGED DESIGN)
@@ -295,6 +301,7 @@ def main():
         st.success(f"Viewing **{seal.upper()}**")
 
         df = safe_read_csv(csv_file)
+
         edited = editable_dataframe(
             convert_machine_to_technician(df, file_type), "current_editor"
         )
