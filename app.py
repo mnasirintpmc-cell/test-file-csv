@@ -128,7 +128,7 @@ def convert_machine_to_technician(df, file_type):
         tech_df['Notes'] = ''
     return tech_df
 
-def convert_to_machine_codes(df, file_type):
+def convert_to_machine_codes(df):
     df = df.copy()
     for col in ['TST_APFlag','TST_MeasurementReq','TST_TorqueCheck']:
         if col in df.columns:
@@ -138,7 +138,7 @@ def convert_to_machine_codes(df, file_type):
     return df
 
 # =====================================================
-# EDITABLE DATAFRAME (FIXED – NO DOUBLE EDIT BUG)
+# EDITABLE DATAFRAME (BUG-FREE)
 # =====================================================
 
 def editable_dataframe(df, key, height=500):
@@ -146,7 +146,7 @@ def editable_dataframe(df, key, height=500):
     if key not in st.session_state:
         st.session_state[key] = df.copy()
 
-    edited = st.data_editor(
+    edited = st.experimental_data_editor(
         st.session_state[key],
         key=f"editor_{key}",
         use_container_width=True,
@@ -158,7 +158,7 @@ def editable_dataframe(df, key, height=500):
     return edited
 
 # =====================================================
-# PROFESSIONAL EXCEL EXPORT (UNCHANGED DESIGN)
+# PROFESSIONAL EXCEL EXPORT (UNCHANGED)
 # =====================================================
 
 def create_professional_excel_from_data(technician_df, file_type):
@@ -231,7 +231,6 @@ def main():
         ["📥 Download Template","🔄 Excel to Machine CSV","📤 Machine CSV to Excel","👀 View Current Test"]
     )
 
-    # ---------------- TEMPLATE ----------------
     if operation == "📥 Download Template":
         seal = st.selectbox("Seal Type",["Main Seal","Separation Seal"])
         file_type = "main_seal" if seal=="Main Seal" else "separation_seal"
@@ -247,7 +246,6 @@ def main():
             file_name=f"{file_type}_template.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
-    # ---------------- EXCEL → CSV ----------------
     elif operation == "🔄 Excel to Machine CSV":
         uploaded = st.file_uploader("Upload Excel",type=['xlsx'])
         if uploaded:
@@ -259,7 +257,7 @@ def main():
             mapping = get_column_mapping(file_type)
 
             machine_df = convert_to_machine_codes(
-                edited.rename(columns=mapping['technician_to_machine']),file_type
+                edited.rename(columns=mapping['technician_to_machine'])
             ).drop(columns=['Step','Notes'],errors='ignore')
 
             st.download_button("📥 Download Machine CSV",
@@ -267,7 +265,6 @@ def main():
                 file_name=f"{file_type}_sequence.csv",
                 mime="text/csv")
 
-    # ---------------- CSV → EXCEL ----------------
     elif operation == "📤 Machine CSV to Excel":
         uploaded = st.file_uploader("Upload CSV",type=['csv'])
         if uploaded:
@@ -286,7 +283,6 @@ def main():
                 file_name=f"{file_type}_professional.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
-    # ---------------- VIEW CURRENT ----------------
     elif operation == "👀 View Current Test":
         seal = st.selectbox("Seal Type",["Main Seal","Separation Seal"])
         file_type = "main_seal" if seal=="Main Seal" else "separation_seal"
