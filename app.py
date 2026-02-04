@@ -123,7 +123,7 @@ def editable_dataframe(df, key, height=500):
     return st.session_state[key]
 
 # =====================================================
-# EXCEL EXPORT (LOGO + METADATA IN INSTRUCTIONS)
+# EXCEL EXPORT (SAFE IMAGE HANDLING)
 # =====================================================
 
 def create_professional_excel_from_data(
@@ -168,19 +168,27 @@ def create_professional_excel_from_data(
         # ---------------- INSTRUCTIONS SHEET ----------------
         instr = wb.add_worksheet('INSTRUCTIONS')
 
+        # SAFE IMAGE EMBED
         if logo_file is not None:
+            image_bytes = io.BytesIO(logo_file.getvalue())
+            image_bytes.seek(0)
+
+            instr.set_column('A:A', 35)
+            instr.set_row(0, 120)
+
             instr.insert_image(
                 'A1',
-                logo_file,
+                'logo.png',  # dummy name
                 {
-                    'image_data': logo_file,
+                    'image_data': image_bytes,
+                    'x_offset': 10,
+                    'y_offset': 10,
                     'x_scale': 0.6,
                     'y_scale': 0.6
                 }
             )
 
         meta_fmt = wb.add_format({'bold': True})
-        title_fmt = wb.add_format({'bold': True, 'font_size': 14})
         header_fmt = wb.add_format({'bold': True})
 
         instr.write('A10', 'Customer Name:', meta_fmt)
@@ -206,7 +214,7 @@ def create_professional_excel_from_data(
         start_row = 14
         for i, text in enumerate(instructions):
             row = start_row + i
-            if text == "HOW TO USE THIS FILE:" or text == "FIELD DESCRIPTIONS:":
+            if text in ["HOW TO USE THIS FILE:", "FIELD DESCRIPTIONS:"]:
                 instr.write(row, 0, text, header_fmt)
             else:
                 instr.write(row, 0, text)
