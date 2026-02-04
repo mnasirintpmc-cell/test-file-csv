@@ -162,12 +162,17 @@ def editable_dataframe(df, key, height=500):
     return st.session_state[key]
 
 # =====================================================
-# EXCEL EXPORT (FIXED LOGO)
+# EXCEL EXPORT (FIXED LOGO + JOB METADATA)
 # =====================================================
 
-def create_professional_excel_from_data(technician_df, file_type):
+def create_professional_excel_from_data(
+    technician_df,
+    file_type,
+    customer_name="",
+    job_no="",
+    ref_no=""
+):
     output = io.BytesIO()
-
     logo_path = os.path.join(os.path.dirname(__file__), "company_logo.png")
 
     with pd.ExcelWriter(output, engine='xlsxwriter') as workbook:
@@ -192,11 +197,15 @@ def create_professional_excel_from_data(technician_df, file_type):
 
         for r in range(1, len(technician_df)+1):
             for c, col in enumerate(technician_df.columns):
-                ws.write(r, c, technician_df.iloc[r-1, c], notes if col=='Notes' else cell)
+                ws.write(
+                    r, c,
+                    technician_df.iloc[r-1, c],
+                    notes if col == 'Notes' else cell
+                )
 
         ws.set_column(0, len(technician_df.columns)-1, 18)
 
-        # -------- INSTRUCTIONS --------
+        # -------- INSTRUCTIONS SHEET --------
         instr = wb.add_worksheet('INSTRUCTIONS')
 
         if os.path.exists(logo_path):
@@ -208,8 +217,19 @@ def create_professional_excel_from_data(technician_df, file_type):
                 {'x_offset': 10, 'y_offset': 10, 'x_scale': 0.6, 'y_scale': 0.6}
             )
 
-        instr.write('A10', 'Export Date:')
-        instr.write('B10', datetime.now().strftime('%Y-%m-%d'))
+        meta_fmt = wb.add_format({'bold': True})
+
+        instr.write('A10', 'Customer Name:', meta_fmt)
+        instr.write('B10', customer_name)
+
+        instr.write('A11', 'Job Number:', meta_fmt)
+        instr.write('B11', job_no)
+
+        instr.write('A12', 'Reference Number:', meta_fmt)
+        instr.write('B12', ref_no)
+
+        instr.write('A13', 'Export Date:', meta_fmt)
+        instr.write('B13', datetime.now().strftime('%Y-%m-%d'))
 
     output.seek(0)
     return output
@@ -220,6 +240,11 @@ def create_professional_excel_from_data(technician_df, file_type):
 
 def main():
     st.title("⚙️ Universal Seal Test Manager")
+
+    st.markdown("### 📄 Job Information")
+    customer_name = st.text_input("Customer Name")
+    job_no = st.text_input("Job Number")
+    ref_no = st.text_input("Reference Number")
 
     operation = st.sidebar.radio(
         "Operation",
@@ -234,12 +259,17 @@ def main():
 
         df = safe_read_csv(csv_file)
         tech_df = convert_machine_to_technician(df, file_type)
-        excel = create_professional_excel_from_data(tech_df, file_type)
 
-        st.download_button("📥 Download Template",
+        excel = create_professional_excel_from_data(
+            tech_df, file_type, customer_name, job_no, ref_no
+        )
+
+        st.download_button(
+            "📥 Download Template",
             excel.getvalue(),
             file_name=f"{file_type}_template.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
 
     elif operation == "🔄 Excel to Machine CSV":
         uploaded = st.file_uploader("Upload Excel", type=['xlsx'])
@@ -255,10 +285,12 @@ def main():
                 edited.rename(columns=mapping['technician_to_machine'])
             ).drop(columns=['Step','Notes'], errors='ignore')
 
-            st.download_button("📥 Download Machine CSV",
+            st.download_button(
+                "📥 Download Machine CSV",
                 machine_df.to_csv(index=False, sep=';'),
                 file_name=f"{file_type}_sequence.csv",
-                mime="text/csv")
+                mime="text/csv"
+            )
 
     elif operation == "📤 Machine CSV to Excel":
         uploaded = st.file_uploader("Upload CSV", type=['csv'])
@@ -270,11 +302,16 @@ def main():
                 convert_machine_to_technician(df, file_type), "csv_editor"
             )
 
-            excel = create_professional_excel_from_data(edited, file_type)
-            st.download_button("📥 Download Excel",
+            excel = create_professional_excel_from_data(
+                edited, file_type, customer_name, job_no, ref_no
+            )
+
+            st.download_button(
+                "📥 Download Excel",
                 excel.getvalue(),
                 file_name=f"{file_type}_professional.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
 
     elif operation == "👀 View Current Test":
         seal = st.selectbox("Seal Type", ["Main Seal", "Separation Seal"])
@@ -286,11 +323,16 @@ def main():
             convert_machine_to_technician(df, file_type), "current_editor"
         )
 
-        excel = create_professional_excel_from_data(edited, file_type)
-        st.download_button("📥 Download Excel",
+        excel = create_professional_excel_from_data(
+            edited, file_type, customer_name, job_no, ref_no
+        )
+
+        st.download_button(
+            "📥 Download Excel",
             excel.getvalue(),
             file_name=f"current_{file_type}_test.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
 
 if __name__ == "__main__":
     main()
