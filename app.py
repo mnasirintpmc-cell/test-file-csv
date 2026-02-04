@@ -215,8 +215,8 @@ def create_professional_excel_from_data(technician_df, file_type):
             "8.make sure you log DE CARTRIDGE",
             "9.MAKE SURE YOU LOG NDE CARTRIDGE",
             "10. MAKE SURE YOU LOG PROJECT NUMBER+NAME",
-            "11. MAKE SURE TO LOGE THE DISCRIPTION+GA ,
-            "12. MAKE SURE TO LOG OPERATOR NAME.,
+            "11. MAKE SURE TO LOGE THE DISCRIPTION+GA ",
+            "12. MAKE SURE TO LOG OPERATOR NAME.",
             "",
             "FIELD DESCRIPTIONS:"
         ] + [f"{c}" for c in technician_df.columns]
