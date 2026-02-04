@@ -64,21 +64,6 @@ def get_column_mapping(file_type):
                 'TST_TestMode': 'Test_Mode',
                 'TST_MeasurementReq': 'Measurement',
                 'TST_TorqueCheck': 'Torque_Check'
-            },
-            'technician_to_machine': {
-                'Speed_RPM': 'TST_SpeedDem',
-                'Cell_Pressure_bar': 'TST_CellPresDemand',
-                'Interface_Pressure_bar': 'TST_InterPresDemand',
-                'BP_Drive_End_bar': 'TST_InterBPDemand_DE',
-                'BP_Non_Drive_End_bar': 'TST_InterBPDemand_NDE',
-                'Gas_Injection_bar': 'TST_GasInjectionDemand',
-                'Duration_s': 'TST_StepDuration',
-                'Auto_Proceed': 'TST_APFlag',
-                'Temperature_C': 'TST_TempDemand',
-                'Gas_Type': 'TST_GasType',
-                'Test_Mode': 'TST_TestMode',
-                'Measurement': 'TST_MeasurementReq',
-                'Torque_Check': 'TST_TorqueCheck'
             }
         }
 
@@ -97,20 +82,6 @@ def get_column_mapping(file_type):
                 'TST_GasType': 'Gas_Type',
                 'TST_MeasurementReq': 'Measurement',
                 'TST_TorqueCheck': 'Torque_Check'
-            },
-            'technician_to_machine': {
-                'Speed_RPM': 'TST_SpeedDem',
-                'Sep_Seal_Flow_Set1': 'TST_SepSealFlwSet1',
-                'Sep_Seal_Flow_Set2': 'TST_SepSealFlwSet2',
-                'Sep_Seal_Pressure_Set1': 'TST_SepSealPSet1',
-                'Sep_Seal_Pressure_Set2': 'TST_SepSealPSet2',
-                'Sep_Seal_Control_Type': 'TST_SepSealControlTyp',
-                'Duration_s': 'TST_StepDuration',
-                'Auto_Proceed': 'TST_APFlag',
-                'Temperature_C': 'TST_TempDemand',
-                'Gas_Type': 'TST_GasType',
-                'Measurement': 'TST_MeasurementReq',
-                'Torque_Check': 'TST_TorqueCheck'
             }
         }
 
@@ -123,19 +94,10 @@ def get_column_mapping(file_type):
 def convert_machine_to_technician(df, file_type):
     mapping = get_column_mapping(file_type)
     tech_df = df.rename(columns=mapping['machine_to_technician'])
-    tech_df.insert(0, 'Step', range(1, len(tech_df)+1))
+    tech_df.insert(0, 'Step', range(1, len(tech_df) + 1))
     if 'Notes' not in tech_df.columns:
         tech_df['Notes'] = ''
     return tech_df
-
-def convert_to_machine_codes(df):
-    df = df.copy()
-    for col in ['TST_APFlag','TST_MeasurementReq','TST_TorqueCheck']:
-        if col in df.columns:
-            df[col] = df[col].map({'Yes':1,'No':0}).fillna(0)
-    if 'TST_TestMode' in df.columns:
-        df['TST_TestMode'] = df['TST_TestMode'].map({'Mode 1':1,'Mode 2':2}).fillna(1)
-    return df
 
 # =====================================================
 # EDITABLE DATAFRAME
@@ -161,55 +123,95 @@ def editable_dataframe(df, key, height=500):
     return st.session_state[key]
 
 # =====================================================
-# EXCEL EXPORT (IMAGE + METADATA ADDED)
+# EXCEL EXPORT (LOGO + METADATA IN INSTRUCTIONS)
 # =====================================================
 
 def create_professional_excel_from_data(
     technician_df,
     file_type,
     customer_name="",
-    reference_number=""
+    job_number="",
+    logo_file=None
 ):
     output = io.BytesIO()
 
-    with pd.ExcelWriter(output, engine='xlsxwriter') as workbook:
-        technician_df.to_excel(workbook, sheet_name='TEST_SEQUENCE', index=False)
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        technician_df.to_excel(writer, sheet_name='TEST_SEQUENCE', index=False)
 
-        wb = workbook.book
-        ws = workbook.sheets['TEST_SEQUENCE']
+        wb = writer.book
+        ws = writer.sheets['TEST_SEQUENCE']
 
-        meta_fmt = wb.add_format({'bold': True})
         header = wb.add_format({
-            'bold': True, 'align': 'center', 'border': 1,
-            'fg_color': '#366092', 'font_color': 'white'
+            'bold': True,
+            'align': 'center',
+            'border': 1,
+            'fg_color': '#366092',
+            'font_color': 'white'
         })
         cell = wb.add_format({'border': 1, 'align': 'center'})
         notes = wb.add_format({'border': 1, 'align': 'left'})
 
-        ws.write('A1', 'Customer Name:', meta_fmt)
-        ws.write('B1', customer_name)
-        ws.write('A2', 'Reference Number:', meta_fmt)
-        ws.write('B2', reference_number)
-        ws.write('A3', 'Export Date:', meta_fmt)
-        ws.write('B3', datetime.now().strftime('%Y-%m-%d'))
-
-        ws.insert_image('D1', 'logo.png', {'x_scale': 0.45, 'y_scale': 0.45})
-
-        table_start_row = 4
-
         for c, col in enumerate(technician_df.columns):
-            ws.write(table_start_row, c, col, header)
+            ws.write(0, c, col, header)
 
-        for r in range(1, len(technician_df)+1):
+        for r in range(1, len(technician_df) + 1):
             for c, col in enumerate(technician_df.columns):
                 ws.write(
-                    table_start_row + r,
+                    r,
                     c,
-                    technician_df.iloc[r-1, c],
+                    technician_df.iloc[r - 1, c],
                     notes if col == 'Notes' else cell
                 )
 
-        ws.set_column(0, len(technician_df.columns)-1, 18)
+        ws.set_column(0, len(technician_df.columns) - 1, 18)
+
+        # ---------------- INSTRUCTIONS SHEET ----------------
+        instr = wb.add_worksheet('INSTRUCTIONS')
+
+        if logo_file is not None:
+            instr.insert_image(
+                'A1',
+                logo_file,
+                {
+                    'image_data': logo_file,
+                    'x_scale': 0.6,
+                    'y_scale': 0.6
+                }
+            )
+
+        meta_fmt = wb.add_format({'bold': True})
+        title_fmt = wb.add_format({'bold': True, 'font_size': 14})
+        header_fmt = wb.add_format({'bold': True})
+
+        instr.write('A10', 'Customer Name:', meta_fmt)
+        instr.write('B10', customer_name)
+
+        instr.write('A11', 'Job Number:', meta_fmt)
+        instr.write('B11', job_number)
+
+        instr.write('A12', 'Export Date:', meta_fmt)
+        instr.write('B12', datetime.now().strftime('%Y-%m-%d'))
+
+        instructions = [
+            "",
+            "HOW TO USE THIS FILE:",
+            "1. This Excel file was generated from a machine CSV",
+            "2. Edit only the TEST_SEQUENCE sheet",
+            "3. Do not modify metadata fields",
+            "4. Upload back to the app to regenerate CSV",
+            "",
+            "FIELD DESCRIPTIONS:"
+        ] + list(technician_df.columns)
+
+        start_row = 14
+        for i, text in enumerate(instructions):
+            row = start_row + i
+            if text == "HOW TO USE THIS FILE:" or text == "FIELD DESCRIPTIONS:":
+                instr.write(row, 0, text, header_fmt)
+            else:
+                instr.write(row, 0, text)
+
+        instr.set_column('A:A', 80)
 
     output.seek(0)
     return output
@@ -221,50 +223,48 @@ def create_professional_excel_from_data(
 def main():
     st.title("⚙️ Universal Seal Test Manager")
 
-    st.markdown("### 📄 Excel Header Information")
-    customer_name = st.text_input("Customer Name (Excel only)")
-    reference_number = st.text_input("Reference Number (Excel only)")
+    st.markdown("### 📄 Excel Information")
+    customer_name = st.text_input("Customer Name")
+    job_number = st.text_input("Job Number")
 
-    operation = st.sidebar.radio(
-        "Operation",
-        ["📥 Download Template", "🔄 Excel to Machine CSV",
-         "📤 Machine CSV to Excel", "👀 View Current Test"]
-    )
+    logo_file = st.file_uploader("Logo (PNG)", type=["png"])
 
-    if operation == "📥 Download Template":
-        seal = st.selectbox("Seal Type", ["Main Seal", "Separation Seal"])
-        file_type = "main_seal" if seal == "Main Seal" else "separation_seal"
-        csv_file = "MainSealSet2.csv" if seal == "Main Seal" else "SeperationSeal.csv"
-
-        df = safe_read_csv(csv_file)
-        tech_df = convert_machine_to_technician(df, file_type)
-
-        excel = create_professional_excel_from_data(
-            tech_df, file_type, customer_name, reference_number
+    if logo_file is not None:
+        st.image(
+            logo_file,
+            caption="Uploaded logo (will be embedded in Excel)",
+            width=250
         )
 
-        st.download_button("📥 Download Template", excel.getvalue(),
-            file_name=f"{file_type}_template.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    st.divider()
 
-    elif operation == "📤 Machine CSV to Excel":
-        uploaded = st.file_uploader("Upload CSV", type=['csv'])
-        if uploaded:
-            df = safe_read_csv(uploaded)
-            file_type = detect_file_type(df)
+    uploaded = st.file_uploader("Upload Machine CSV", type=["csv"])
 
-            edited = editable_dataframe(
-                convert_machine_to_technician(df, file_type), "csv_editor"
-            )
+    if uploaded:
+        df = safe_read_csv(uploaded)
+        file_type = detect_file_type(df)
 
-            excel = create_professional_excel_from_data(
-                edited, file_type, customer_name, reference_number
-            )
+        st.info(f"Detected: **{file_type.replace('_', ' ').upper()}**")
 
-            st.download_button("📥 Download Excel",
-                excel.getvalue(),
-                file_name=f"{file_type}_professional.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        edited = editable_dataframe(
+            convert_machine_to_technician(df, file_type),
+            "csv_editor"
+        )
+
+        excel = create_professional_excel_from_data(
+            edited,
+            file_type,
+            customer_name,
+            job_number,
+            logo_file
+        )
+
+        st.download_button(
+            "📥 Download Excel",
+            excel.getvalue(),
+            file_name=f"{file_type}_professional.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
 
 if __name__ == "__main__":
     main()
