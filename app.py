@@ -1,10 +1,10 @@
-
 import streamlit as st
 import pandas as pd
 import io
 from datetime import datetime
 import numpy as np
 import math
+import os
 
 # =====================================================
 # SAFE CSV READER
@@ -139,7 +139,7 @@ def convert_to_machine_codes(df):
     return df
 
 # =====================================================
-# EDITABLE DATAFRAME (FORM-BASED – NO RERUNS)
+# EDITABLE DATAFRAME
 # =====================================================
 
 def editable_dataframe(df, key, height=500):
@@ -165,11 +165,12 @@ def editable_dataframe(df, key, height=500):
     return st.session_state[key]
 
 # =====================================================
-# PROFESSIONAL EXCEL EXPORT (UNCHANGED DESIGN)
+# PROFESSIONAL EXCEL EXPORT (FIXED LOGO ONLY)
 # =====================================================
 
 def create_professional_excel_from_data(technician_df, file_type):
     output = io.BytesIO()
+    logo_path = os.path.join(os.path.dirname(__file__), "company_logo.png")
 
     with pd.ExcelWriter(output, engine='xlsxwriter') as workbook:
         technician_df.to_excel(workbook, sheet_name='TEST_SEQUENCE', index=False)
@@ -198,8 +199,18 @@ def create_professional_excel_from_data(technician_df, file_type):
         ws.set_column(0, len(technician_df.columns)-1, 18)
 
         instr = wb.add_worksheet('INSTRUCTIONS')
-        date = datetime.now().strftime('%Y-%m-%d')
 
+        # ---- FIXED LOGO ON LEFT ----
+        if os.path.exists(logo_path):
+            instr.set_column('A:A', 32)
+            instr.set_row(0, 120)
+            instr.insert_image(
+                'A1',
+                logo_path,
+                {'x_offset': 10, 'y_offset': 10, 'x_scale': 0.6, 'y_scale': 0.6}
+            )
+
+        date = datetime.now().strftime('%Y-%m-%d')
         title = f"{'MAIN SEAL' if file_type=='main_seal' else 'SEPARATION SEAL'} TEST SEQUENCE - EXPORTED {date}"
 
         instructions = [
@@ -219,20 +230,22 @@ def create_professional_excel_from_data(technician_df, file_type):
             "12. MAKE SURE TO LOG OPERATOR NAME. NOT INCLUDED HERE",
             "",
             "FIELD DESCRIPTIONS:"
-        ] + [f"{c}" for c in technician_df.columns]
+        ] + list(technician_df.columns)
 
         title_fmt = wb.add_format({'bold': True, 'font_size': 14, 'font_color': '#366092'})
         header_fmt = wb.add_format({'bold': True, 'font_color': '#366092'})
 
+        start_row = 12
         for r, text in enumerate(instructions):
+            row = start_row + r
             if r == 0:
-                instr.write(r, 0, text, title_fmt)
+                instr.write(row, 1, text, title_fmt)
             elif text in ["HOW TO USE THIS FILE:", "FIELD DESCRIPTIONS:"]:
-                instr.write(r, 0, text, header_fmt)
+                instr.write(row, 1, text, header_fmt)
             else:
-                instr.write(r, 0, text)
+                instr.write(row, 1, text)
 
-        instr.set_column('A:A', 75)
+        instr.set_column('B:B', 75)
 
     output.seek(0)
     return output
@@ -246,7 +259,8 @@ def main():
 
     operation = st.sidebar.radio(
         "Operation",
-        ["📥 Download Template", "🔄 Excel to Machine CSV", "📤 Machine CSV to Excel", "👀 View Current Test"]
+        ["📥 Download Template", "🔄 Excel to Machine CSV",
+         "📤 Machine CSV to Excel", "👀 View Current Test"]
     )
 
     if operation == "📥 Download Template":
@@ -255,11 +269,9 @@ def main():
         csv_file = "MainSealSet2.csv" if seal == "Main Seal" else "SeperationSeal.csv"
 
         df = safe_read_csv(csv_file)
-        st.info(f"Template: **{seal.upper()}**")
-
         tech_df = convert_machine_to_technician(df, file_type)
-        excel = create_professional_excel_from_data(tech_df, file_type)
 
+        excel = create_professional_excel_from_data(tech_df, file_type)
         st.download_button("📥 Download Template", excel.getvalue(),
             file_name=f"{file_type}_template.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
@@ -289,8 +301,6 @@ def main():
             df = safe_read_csv(uploaded)
             file_type = detect_file_type(df)
 
-            st.info(f"Detected: **{file_type.replace('_',' ').upper()}**")
-
             edited = editable_dataframe(
                 convert_machine_to_technician(df, file_type), "csv_editor"
             )
@@ -306,10 +316,7 @@ def main():
         file_type = "main_seal" if seal == "Main Seal" else "separation_seal"
         csv_file = "MainSealSet2.csv" if seal == "Main Seal" else "SeperationSeal.csv"
 
-        st.success(f"Viewing **{seal.upper()}**")
-
         df = safe_read_csv(csv_file)
-
         edited = editable_dataframe(
             convert_machine_to_technician(df, file_type), "current_editor"
         )
