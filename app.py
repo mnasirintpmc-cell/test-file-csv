@@ -83,7 +83,8 @@ def get_column_mapping(file_type):
                 'Auto_Proceed': 'TST_APFlag',
                 'Temperature_C': 'TST_TempDemand',
                 'Gas_Type': 'TST_GasType',
-                'Test_Mode': 'TST_TestMode',<br>                'Measurement': 'TST_MeasurementReq',
+                'Test_Mode': 'TST_TestMode',
+                'Measurement': 'TST_MeasurementReq',
                 'Torque_Check': 'TST_TorqueCheck'
             }
         }
@@ -125,22 +126,18 @@ def get_column_mapping(file_type):
 # =====================================================
 
 def apply_safety_styles(row):
-    """Returns a list of CSS strings for the row cells."""
     styles = [''] * len(row)
     cols = row.index.tolist()
     
-    # Speed Highlight
     if 'Speed_RPM' in cols and row['Speed_RPM'] > MAX_SPEED_RPM:
         styles[cols.index('Speed_RPM')] = 'background-color: #ff4b4b; color: white;'
     
-    # Cell Pressure Highlight
     if 'Cell_Pressure_bar' in cols and row['Cell_Pressure_bar'] > MAX_CELL_PRESSURE:
         styles[cols.index('Cell_Pressure_bar')] = 'background-color: #ff4b4b; color: white;'
         
-    # Differential Check (95% of Cell)
     if 'Cell_Pressure_bar' in cols and 'Interface_Pressure_bar' in cols:
         expected = row['Cell_Pressure_bar'] * DIFF_TARGET
-        if abs(row['Interface_Pressure_bar'] - expected) > 0.5: # 0.5 bar tolerance
+        if abs(row['Interface_Pressure_bar'] - expected) > 0.5:
             styles[cols.index('Interface_Pressure_bar')] = 'background-color: #ff4b4b; color: white;'
             
     return styles
@@ -175,7 +172,6 @@ def editable_dataframe(df, key, height=500):
     if key not in st.session_state:
         st.session_state[key] = df.copy()
 
-    # Safety Preview (Shows the table with red highlights)
     st.write("### 🛡️ Safety Preview")
     st.dataframe(
         st.session_state[key].style.apply(apply_safety_styles, axis=1), 
@@ -187,7 +183,7 @@ def editable_dataframe(df, key, height=500):
             st.session_state[key],
             use_container_width=True,
             height=height,
-            num_rows="dynamic" # Allow adding/deleting rows
+            num_rows="dynamic"
         )
         submitted = st.form_submit_button("✅ Apply and Validate Changes")
 
@@ -211,14 +207,12 @@ def create_professional_excel_from_data(technician_df, file_type):
         ws = workbook.sheets['TEST_SEQUENCE']
 
         header = wb.add_format({'bold': True, 'text_wrap': True, 'align': 'center', 'border': 1, 'fg_color': '#366092', 'font_color': 'white'})
-        cell = wb.add_format({'border': 1, 'align': 'center'})
         
         for c, col in enumerate(technician_df.columns):
             ws.write(0, c, col, header)
         
         ws.set_column(0, len(technician_df.columns)-1, 18)
         
-        # Instructions sheet
         instr = wb.add_worksheet('INSTRUCTIONS')
         if os.path.exists(logo_path):
             instr.insert_image('A1', logo_path, {'x_scale': 0.6, 'y_scale': 0.6})
@@ -267,10 +261,7 @@ def main():
             edited = editable_dataframe(df, "excel_editor")
             mapping = get_column_mapping(file_type)
 
-            # Map back to machine codes and filter for the exact PLC columns
             machine_df = convert_to_machine_codes(edited.rename(columns=mapping['technician_to_machine']))
-            
-            # Ensure output only contains valid machine columns
             valid_cols = list(mapping['technician_to_machine'].values())
             machine_df = machine_df[valid_cols]
 
