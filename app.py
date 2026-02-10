@@ -1,3 +1,4 @@
+
 import streamlit as st
 import pandas as pd
 import io
@@ -5,34 +6,6 @@ from datetime import datetime
 import numpy as np
 import math
 import os
-
-# =====================================================
-# SAFETY LIMITS (THE RED HIGHLIGHT RULES)
-# =====================================================
-MAX_CELL_PRESSURE = 450.0
-MAX_SPEED_RPM = 32000.0
-DIFF_TARGET = 0.95 
-
-def apply_safety_styles(row):
-    """Adds red highlighting to safety violations without changing data."""
-    styles = [''] * len(row)
-    cols = row.index.tolist()
-    
-    # Speed Violation
-    if 'Speed_RPM' in cols and row['Speed_RPM'] > MAX_SPEED_RPM:
-        styles[cols.index('Speed_RPM')] = 'background-color: #9e1a1a; color: white;'
-    
-    # Cell Pressure Violation
-    if 'Cell_Pressure_bar' in cols and row['Cell_Pressure_bar'] > MAX_CELL_PRESSURE:
-        styles[cols.index('Cell_Pressure_bar')] = 'background-color: #9e1a1a; color: white;'
-        
-    # Differential Violation (Must be 95% of Cell)
-    if 'Cell_Pressure_bar' in cols and 'Interface_Pressure_bar' in cols:
-        expected = row['Cell_Pressure_bar'] * DIFF_TARGET
-        if abs(row['Interface_Pressure_bar'] - expected) > 0.5:
-            styles[cols.index('Interface_Pressure_bar')] = 'background-color: #9e1a1a; color: white;'
-            
-    return styles
 
 # =====================================================
 # SAFE CSV READER
@@ -76,6 +49,7 @@ def detect_file_type(df):
 # =====================================================
 
 def get_column_mapping(file_type):
+
     if file_type == 'main_seal':
         return {
             'machine_to_technician': {
@@ -109,6 +83,7 @@ def get_column_mapping(file_type):
                 'Torque_Check': 'TST_TorqueCheck'
             }
         }
+
     if file_type == 'separation_seal':
         return {
             'machine_to_technician': {
@@ -140,6 +115,7 @@ def get_column_mapping(file_type):
                 'Torque_Check': 'TST_TorqueCheck'
             }
         }
+
     return None
 
 # =====================================================
@@ -149,8 +125,7 @@ def get_column_mapping(file_type):
 def convert_machine_to_technician(df, file_type):
     mapping = get_column_mapping(file_type)
     tech_df = df.rename(columns=mapping['machine_to_technician'])
-    if 'Step' not in tech_df.columns:
-        tech_df.insert(0, 'Step', range(1, len(tech_df)+1))
+    tech_df.insert(0, 'Step', range(1, len(tech_df)+1))
     if 'Notes' not in tech_df.columns:
         tech_df['Notes'] = ''
     return tech_df
@@ -159,40 +134,39 @@ def convert_to_machine_codes(df):
     df = df.copy()
     for col in ['TST_APFlag','TST_MeasurementReq','TST_TorqueCheck']:
         if col in df.columns:
-            df[col] = df[col].map({'Yes':1,'No':0, 1:1, 0:0}).fillna(0)
+            df[col] = df[col].map({'Yes':1,'No':0}).fillna(0)
     if 'TST_TestMode' in df.columns:
-        df['TST_TestMode'] = df['TST_TestMode'].map({'Mode 1':1,'Mode 2':2, 1:1, 2:2}).fillna(1)
+        df['TST_TestMode'] = df['TST_TestMode'].map({'Mode 1':1,'Mode 2':2}).fillna(1)
     return df
 
 # =====================================================
-# EDITABLE DATAFRAME WITH HIGHLIGHTING
+# EDITABLE DATAFRAME
 # =====================================================
 
 def editable_dataframe(df, key, height=500):
+
     if key not in st.session_state:
         st.session_state[key] = df.copy()
 
-    # VISUAL SAFETY PREVIEW
-    st.write("### 🛡️ Safety Validation View")
-    st.dataframe(st.session_state[key].style.apply(apply_safety_styles, axis=1), use_container_width=True)
-
     with st.form(f"form_{key}"):
+
         edited = st.data_editor(
             st.session_state[key],
             use_container_width=True,
             height=height,
             num_rows="fixed"
         )
-        submitted = st.form_submit_button("✅ Apply changes & Validate")
+
+        submitted = st.form_submit_button("✅ Apply changes")
 
     if submitted:
         st.session_state[key] = edited
-        st.rerun()
+        st.success("Changes applied")
 
     return st.session_state[key]
 
 # =====================================================
-# PROFESSIONAL EXCEL EXPORT
+# PROFESSIONAL EXCEL EXPORT (FIXED LOGO ONLY)
 # =====================================================
 
 def create_professional_excel_from_data(technician_df, file_type):
@@ -201,24 +175,78 @@ def create_professional_excel_from_data(technician_df, file_type):
 
     with pd.ExcelWriter(output, engine='xlsxwriter') as workbook:
         technician_df.to_excel(workbook, sheet_name='TEST_SEQUENCE', index=False)
+
         wb = workbook.book
         ws = workbook.sheets['TEST_SEQUENCE']
 
-        header = wb.add_format({'bold': True, 'text_wrap': True, 'align': 'center', 'border': 1, 'fg_color': '#366092', 'font_color': 'white'})
+        header = wb.add_format({
+            'bold': True,
+            'text_wrap': True,
+            'align': 'center',
+            'border': 1,
+            'fg_color': '#366092',
+            'font_color': 'white'
+        })
         cell = wb.add_format({'border': 1, 'align': 'center'})
-        
+        notes = wb.add_format({'border': 1, 'align': 'left'})
+
         for c, col in enumerate(technician_df.columns):
             ws.write(0, c, col, header)
-        
+
+        for r in range(1, len(technician_df)+1):
+            for c, col in enumerate(technician_df.columns):
+                ws.write(r, c, technician_df.iloc[r-1, c], notes if col=='Notes' else cell)
+
         ws.set_column(0, len(technician_df.columns)-1, 18)
-        
+
         instr = wb.add_worksheet('INSTRUCTIONS')
+
+        # ---- FIXED LOGO ON LEFT ----
         if os.path.exists(logo_path):
-            instr.insert_image('A1', logo_path, {'x_scale': 0.6, 'y_scale': 0.6})
-            
+            instr.set_column('A:A', 32)
+            instr.set_row(0, 120)
+            instr.insert_image(
+                'A1',
+                logo_path,
+                {'x_offset': 10, 'y_offset': 10, 'x_scale': 0.6, 'y_scale': 0.6}
+            )
+
         date = datetime.now().strftime('%Y-%m-%d')
-        instr.write('B12', f"EXPORTED ON: {date}")
-        instr.write('B14', "SAFETY CHECK: CELL < 450 BAR | SPEED < 32000 RPM")
+        title = f"{'MAIN SEAL' if file_type=='main_seal' else 'SEPARATION SEAL'} TEST SEQUENCE - EXPORTED {date}"
+
+        instructions = [
+            title,"",
+            "HOW TO USE THIS FILE:",
+            "1. This file contains your current test sequence",
+            "2. All cells have proper borders and formatting",
+            "3. Dropdown menus are included for standardized inputs",
+            "4. You can edit this file and upload it back to the web app",
+            "5. Use the conversion tool to generate machine CSV files",
+            "6.make sure you log test id NOT INCLUDED HERE",
+            "7.make sure you log seal sizeNOT INCLUDED HERE",
+            "8.make sure you log DE CARTRIDGE NOT INCLUDED HERE",
+            "9.MAKE SURE YOU LOG NDE CARTRIDGE NOT INCLUDED HERE",
+            "10. MAKE SURE YOU LOG PROJECT NUMBER+NAME NOT INCLUDED HERE",
+            "11. MAKE SURE TO LOGE THE DISCRIPTION+GA NOT INCLUDED HERE ",
+            "12. MAKE SURE TO LOG OPERATOR NAME. NOT INCLUDED HERE",
+            "",
+            "FIELD DESCRIPTIONS:"
+        ] + list(technician_df.columns)
+
+        title_fmt = wb.add_format({'bold': True, 'font_size': 14, 'font_color': '#366092'})
+        header_fmt = wb.add_format({'bold': True, 'font_color': '#366092'})
+
+        start_row = 12
+        for r, text in enumerate(instructions):
+            row = start_row + r
+            if r == 0:
+                instr.write(row, 1, text, title_fmt)
+            elif text in ["HOW TO USE THIS FILE:", "FIELD DESCRIPTIONS:"]:
+                instr.write(row, 1, text, header_fmt)
+            else:
+                instr.write(row, 1, text)
+
+        instr.set_column('B:B', 75)
 
     output.seek(0)
     return output
@@ -228,23 +256,26 @@ def create_professional_excel_from_data(technician_df, file_type):
 # =====================================================
 
 def main():
-    st.set_page_config(layout="wide")
     st.title("⚙️ Universal Seal Test Manager")
 
     operation = st.sidebar.radio(
         "Operation",
-        ["📥 Download Template", "🔄 Excel to Machine CSV", "📤 Machine CSV to Excel", "👀 View Current Test"]
+        ["📥 Download Template", "🔄 Excel to Machine CSV",
+         "📤 Machine CSV to Excel", "👀 View Current Test"]
     )
 
     if operation == "📥 Download Template":
         seal = st.selectbox("Seal Type", ["Main Seal", "Separation Seal"])
         file_type = "main_seal" if seal == "Main Seal" else "separation_seal"
         csv_file = "MainSealSet2.csv" if seal == "Main Seal" else "SeperationSeal.csv"
-        if os.path.exists(csv_file):
-            df = safe_read_csv(csv_file)
-            tech_df = convert_machine_to_technician(df, file_type)
-            excel = create_professional_excel_from_data(tech_df, file_type)
-            st.download_button("📥 Download Template", excel.getvalue(), file_name=f"{file_type}_template.xlsx")
+
+        df = safe_read_csv(csv_file)
+        tech_df = convert_machine_to_technician(df, file_type)
+
+        excel = create_professional_excel_from_data(tech_df, file_type)
+        st.download_button("📥 Download Template", excel.getvalue(),
+            file_name=f"{file_type}_template.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
     elif operation == "🔄 Excel to Machine CSV":
         uploaded = st.file_uploader("Upload Excel", type=['xlsx'])
@@ -252,46 +283,50 @@ def main():
             df = pd.read_excel(uploaded, sheet_name='TEST_SEQUENCE')
             df = df.dropna(subset=['Step']).reset_index(drop=True)
             file_type = detect_file_type(df)
-            
-            # The Highlighted Editor
+
             edited = editable_dataframe(df, "excel_editor")
             mapping = get_column_mapping(file_type)
 
-            # RECONSTRUCT MACHINE CSV - EXACT STRUCTURE
             machine_df = convert_to_machine_codes(
                 edited.rename(columns=mapping['technician_to_machine'])
             ).drop(columns=['Step','Notes'], errors='ignore')
 
-            # Fix Column Order for Simulation
-            original_cols = list(mapping['machine_to_technician'].keys())
-            machine_df = machine_df[original_cols]
-
-            st.download_button(
-                "📥 Download Machine CSV (Simulation Ready)",
+            st.download_button("📥 Download Machine CSV",
                 machine_df.to_csv(index=False, sep=';'),
-                file_name=f"{file_type}_sequence.csv"
-            )
+                file_name=f"{file_type}_sequence.csv",
+                mime="text/csv")
 
     elif operation == "📤 Machine CSV to Excel":
         uploaded = st.file_uploader("Upload CSV", type=['csv'])
         if uploaded:
             df = safe_read_csv(uploaded)
             file_type = detect_file_type(df)
-            tech_df = convert_machine_to_technician(df, file_type)
-            edited = editable_dataframe(tech_df, "csv_editor")
+
+            edited = editable_dataframe(
+                convert_machine_to_technician(df, file_type), "csv_editor"
+            )
+
             excel = create_professional_excel_from_data(edited, file_type)
-            st.download_button("📥 Download Excel", excel.getvalue(), file_name=f"{file_type}_professional.xlsx")
+            st.download_button("📥 Download Excel",
+                excel.getvalue(),
+                file_name=f"{file_type}_professional.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
     elif operation == "👀 View Current Test":
         seal = st.selectbox("Seal Type", ["Main Seal", "Separation Seal"])
         file_type = "main_seal" if seal == "Main Seal" else "separation_seal"
         csv_file = "MainSealSet2.csv" if seal == "Main Seal" else "SeperationSeal.csv"
-        if os.path.exists(csv_file):
-            df = safe_read_csv(csv_file)
-            tech_df = convert_machine_to_technician(df, file_type)
-            edited = editable_dataframe(tech_df, "current_editor")
-            excel = create_professional_excel_from_data(edited, file_type)
-            st.download_button("📥 Download Excel", excel.getvalue(), file_name=f"current_{file_type}_test.xlsx")
+
+        df = safe_read_csv(csv_file)
+        edited = editable_dataframe(
+            convert_machine_to_technician(df, file_type), "current_editor"
+        )
+
+        excel = create_professional_excel_from_data(edited, file_type)
+        st.download_button("📥 Download Excel",
+            excel.getvalue(),
+            file_name=f"current_{file_type}_test.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
 if __name__ == "__main__":
     main()
