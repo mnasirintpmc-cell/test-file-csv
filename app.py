@@ -256,7 +256,7 @@ def create_professional_excel_from_data(technician_df, file_type):
 # =====================================================
 
 def main():
-    st.title("⚙️ Universal Seal Test Manager")
+    st.title("⚙️ Seal Test Manager")
 
     operation = st.sidebar.radio(
         "Operation",
