@@ -38,7 +38,7 @@ def safe_read_csv(file_path_or_buffer):
 
 def detect_file_type(df):
     cols = df.columns.tolist()
-    if 'TST_CellPresDemand' in cols or 'Primary_seal_Gas _Pressure_(barg)' in cols:
+    if 'TST_CellPresDemand' in cols or 'Primary_seal_Gas_Pressure_(barg)' in cols:
         return 'main_seal'
     if 'TST_SepSealFlwSet1' in cols or 'Sep_Seal_Flow_Set1' in cols:
         return 'separation_seal'
