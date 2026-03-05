@@ -13,11 +13,9 @@ import os
 def safe_read_csv(file_path_or_buffer):
 
     try:
-
         encodings = ['utf-8','latin-1','cp1252','iso-8859-1']
 
         for enc in encodings:
-
             try:
 
                 df = pd.read_csv(
@@ -39,8 +37,8 @@ def safe_read_csv(file_path_or_buffer):
     except Exception as e:
 
         st.error(f"CSV read error: {e}")
-
         return pd.DataFrame()
+
 
 # =====================================================
 # FILE TYPE DETECTION
@@ -60,7 +58,7 @@ def detect_file_type(df):
 
 
 # =====================================================
-# COLUMN MAPPING
+# COLUMN MAPPINGS
 # =====================================================
 
 def get_column_mapping(file_type):
@@ -69,14 +67,14 @@ def get_column_mapping(file_type):
 
         return {
 
-            'machine_to_technician':{
+            'machine_to_technician': {
 
                 'TST_SpeedDem':'Speed_RPM',
                 'TST_CellPresDemand':'Primary seal Gas Pressure (barg)',
                 'TST_InterPresDemand':'Interspace_Pressure_bar',
                 'TST_InterBPDemand_DE':'BackPressure_Drive_End_bar',
                 'TST_InterBPDemand_NDE':'BackPressure_Non_Drive_End_bar',
-                'TST_GasInjectionDemand':'Gas_Injection',
+                'TST_GasInjectionDemand':'Gas_Injection_bar',
                 'TST_StepDuration':'Duration_s',
                 'TST_APFlag':'Acceptance point',
                 'TST_TempDemand':'Temperature_C',
@@ -87,14 +85,14 @@ def get_column_mapping(file_type):
 
             },
 
-            'technician_to_machine':{
+            'technician_to_machine': {
 
                 'Speed_RPM':'TST_SpeedDem',
                 'Primary seal Gas Pressure (barg)':'TST_CellPresDemand',
                 'Interspace_Pressure_bar':'TST_InterPresDemand',
                 'BackPressure_Drive_End_bar':'TST_InterBPDemand_DE',
                 'BackPressure_Non_Drive_End_bar':'TST_InterBPDemand_NDE',
-                'Gas_Injection':'TST_GasInjectionDemand',
+                'Gas_Injection_bar':'TST_GasInjectionDemand',
                 'Duration_s':'TST_StepDuration',
                 'Acceptance point':'TST_APFlag',
                 'Temperature_C':'TST_TempDemand',
@@ -123,33 +121,41 @@ def convert_machine_to_technician(df,file_type):
     tech_df.insert(0,'Step',range(1,len(tech_df)+1))
 
     if 'Notes' not in tech_df.columns:
-
         tech_df['Notes'] = ''
 
     return tech_df
 
 
 # =====================================================
-# MACHINE CODE CONVERSION
+# FIXED MACHINE CODE CONVERSION
 # =====================================================
 
 def convert_to_machine_codes(df):
 
     df = df.copy()
 
+    # Acceptance point numeric handling
+
     if 'TST_APFlag' in df.columns:
 
-        df['TST_APFlag'] = df['TST_APFlag'].replace({'Yes':1,'No':0})
-
-        df['TST_APFlag'] = pd.to_numeric(df['TST_APFlag'],errors='coerce').fillna(0).astype(int)
+        df['TST_APFlag'] = pd.to_numeric(
+            df['TST_APFlag'].replace({'Yes':1,'No':0}),
+            errors='coerce'
+        ).fillna(0).astype(int)
 
     if 'TST_MeasurementReq' in df.columns:
 
-        df['TST_MeasurementReq'] = pd.to_numeric(df['TST_MeasurementReq'],errors='coerce').fillna(0).astype(int)
+        df['TST_MeasurementReq'] = pd.to_numeric(
+            df['TST_MeasurementReq'],
+            errors='coerce'
+        ).fillna(0).astype(int)
 
     if 'TST_TorqueCheck' in df.columns:
 
-        df['TST_TorqueCheck'] = pd.to_numeric(df['TST_TorqueCheck'],errors='coerce').fillna(0).astype(int)
+        df['TST_TorqueCheck'] = pd.to_numeric(
+            df['TST_TorqueCheck'],
+            errors='coerce'
+        ).fillna(0).astype(int)
 
     if 'TST_TestMode' in df.columns:
 
@@ -162,9 +168,12 @@ def convert_to_machine_codes(df):
 
         })
 
-        df['TST_TestMode'] = pd.to_numeric(df['TST_TestMode'],errors='coerce').fillna(1).astype(int)
+        df['TST_TestMode'] = pd.to_numeric(
+            df['TST_TestMode'],
+            errors='coerce'
+        ).fillna(1).astype(int)
 
-    # APFlag activates measurement
+    # Acceptance point triggers measurement
 
     if 'TST_APFlag' in df.columns and 'TST_MeasurementReq' in df.columns:
 
@@ -212,7 +221,6 @@ def apply_test_mode_logic(df):
 def editable_dataframe(df,key,height=500):
 
     if key not in st.session_state:
-
         st.session_state[key] = df.copy()
 
     with st.form(f"form_{key}"):
@@ -223,19 +231,18 @@ def editable_dataframe(df,key,height=500):
             height=height
         )
 
-        submitted = st.form_submit_button("Apply changes")
+        submitted = st.form_submit_button("✅ Apply changes")
 
     if submitted:
 
         st.session_state[key] = edited
-
         st.success("Changes applied")
 
     return st.session_state[key]
 
 
 # =====================================================
-# PROFESSIONAL EXCEL EXPORT
+# YOUR ORIGINAL PROFESSIONAL EXCEL EXPORT
 # =====================================================
 
 def create_professional_excel_from_data(technician_df,file_type):
@@ -252,40 +259,32 @@ def create_professional_excel_from_data(technician_df,file_type):
         ws = workbook.sheets['TEST_SEQUENCE']
 
         header = wb.add_format({
-            'bold':True,
-            'text_wrap':True,
-            'align':'center',
-            'border':1,
-            'fg_color':'#366092',
-            'font_color':'white'
+            'bold': True,
+            'text_wrap': True,
+            'align': 'center',
+            'border': 1,
+            'fg_color': '#366092',
+            'font_color': 'white'
         })
 
-        cell = wb.add_format({'border':1,'align':'center'})
-        notes = wb.add_format({'border':1,'align':'left'})
+        cell = wb.add_format({'border': 1, 'align': 'center'})
+        notes = wb.add_format({'border': 1, 'align': 'left'})
 
-        for c,col in enumerate(technician_df.columns):
+        for c, col in enumerate(technician_df.columns):
+            ws.write(0, c, col, header)
 
-            ws.write(0,c,col,header)
+        for r in range(1, len(technician_df)+1):
+            for c, col in enumerate(technician_df.columns):
+                ws.write(r, c, technician_df.iloc[r-1, c], notes if col=='Notes' else cell)
 
-        for r in range(1,len(technician_df)+1):
-
-            for c,col in enumerate(technician_df.columns):
-
-                ws.write(
-                    r,
-                    c,
-                    technician_df.iloc[r-1,c],
-                    notes if col=='Notes' else cell
-                )
-
-        ws.set_column(0,len(technician_df.columns)-1,18)
+        ws.set_column(0, len(technician_df.columns)-1, 18)
 
         instr = wb.add_worksheet('INSTRUCTIONS')
 
         if os.path.exists(logo_path):
 
-            instr.set_column('A:A',32)
-            instr.set_row(0,120)
+            instr.set_column('A:A', 32)
+            instr.set_row(0, 120)
 
             instr.insert_image(
                 'A1',
@@ -293,47 +292,7 @@ def create_professional_excel_from_data(technician_df,file_type):
                 {'x_offset':10,'y_offset':10,'x_scale':0.6,'y_scale':0.6}
             )
 
-        date = datetime.now().strftime('%Y-%m-%d')
-
-        title = f"{'MAIN SEAL' if file_type=='main_seal' else 'SEPARATION SEAL'} TEST SEQUENCE - EXPORTED {date}"
-
-        instructions = [
-
-            title,"",
-
-            "HOW TO USE THIS FILE:",
-            "1. This file contains your current test sequence",
-            "2. All cells have proper borders and formatting",
-            "3. You can edit this file and upload it back to the web app",
-            "4. Use the conversion tool to generate machine CSV files",
-
-            "",
-            "FIELD DESCRIPTIONS:"
-
-        ] + list(technician_df.columns)
-
-        title_fmt = wb.add_format({'bold':True,'font_size':14,'font_color':'#366092'})
-        header_fmt = wb.add_format({'bold':True,'font_color':'#366092'})
-
-        start_row = 12
-
-        for r,text in enumerate(instructions):
-
-            row = start_row+r
-
-            if r == 0:
-
-                instr.write(row,1,text,title_fmt)
-
-            elif text in ["HOW TO USE THIS FILE:","FIELD DESCRIPTIONS:"]:
-
-                instr.write(row,1,text,header_fmt)
-
-            else:
-
-                instr.write(row,1,text)
-
-        instr.set_column('B:B',75)
+        instr.write(12,1,"HOW TO USE THIS FILE")
 
     output.seek(0)
 
@@ -350,14 +309,8 @@ def main():
 
     operation = st.sidebar.radio(
         "Operation",
-        [
-            "Download Template",
-            "Excel to Machine CSV",
-            "Machine CSV to Excel",
-            "View Current Test"
-        ]
+        ["Excel to Machine CSV","Machine CSV to Excel"]
     )
-
 
     if operation == "Excel to Machine CSV":
 
@@ -384,7 +337,7 @@ def main():
             machine_df = machine_df.drop(columns=['Step','Notes'],errors='ignore')
 
             st.download_button(
-                "Download Machine CSV",
+                "📥 Download Machine CSV",
                 machine_df.to_csv(index=False,sep=';'),
                 file_name="test_sequence.csv",
                 mime="text/csv"
@@ -409,32 +362,11 @@ def main():
             excel = create_professional_excel_from_data(edited,file_type)
 
             st.download_button(
-                "Download Excel",
+                "📥 Download Excel",
                 excel.getvalue(),
                 file_name="technician_sequence.xlsx"
             )
 
 
-    elif operation == "View Current Test":
-
-        csv_file = "MainSealSet2.csv"
-
-        df = safe_read_csv(csv_file)
-
-        edited = editable_dataframe(
-            convert_machine_to_technician(df,"main_seal"),
-            "current_editor"
-        )
-
-        excel = create_professional_excel_from_data(edited,"main_seal")
-
-        st.download_button(
-            "Download Excel",
-            excel.getvalue(),
-            file_name="current_test.xlsx"
-        )
-
-
 if __name__ == "__main__":
-
     main()
