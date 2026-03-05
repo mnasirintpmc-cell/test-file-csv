@@ -38,7 +38,7 @@ def safe_read_csv(file_path_or_buffer):
 
 def detect_file_type(df):
     cols = df.columns.tolist()
-    if 'TST_CellPresDemand' in cols or 'Primary seal Gas Pressure (barg)' in cols:
+    if 'TST_CellPresDemand' in cols or 'Primary_seal_Gas _Pressure_(barg)' in cols:
         return 'main_seal'
     if 'TST_SepSealFlwSet1' in cols or 'Sep_Seal_Flow_Set1' in cols:
         return 'separation_seal'
@@ -54,7 +54,7 @@ def get_column_mapping(file_type):
         return {
             'machine_to_technician': {
                 'TST_SpeedDem': 'Speed_RPM',
-                'TST_CellPresDemand': 'Primary_seal_Gas_Pressure _(barg)',
+                'TST_CellPresDemand': 'Primary_seal_Gas_Pressure_(barg)',
                 'TST_InterPresDemand': 'Interspace_Pressure_bar',
                 'TST_InterBPDemand_DE': 'BackPressure_Drive_End_bar',
                 'TST_InterBPDemand_NDE': 'BackPressure_Non_Drive_End_bar',
@@ -69,7 +69,7 @@ def get_column_mapping(file_type):
             },
             'technician_to_machine': {
                 'Speed_RPM': 'TST_SpeedDem',
-                'Primary_seal_Gas_Pressure _(barg)': 'TST_CellPresDemand',
+                'Primary_seal_Gas_Pressure_(barg)': 'TST_CellPresDemand',
                 'Interspace_Pressure_bar': 'TST_InterPresDemand',
                 'BackPressure_Drive_End_bar': 'TST_InterBPDemand_DE',
                 'BackPressure_Non_Drive_End_bar': 'TST_InterBPDemand_NDE',
