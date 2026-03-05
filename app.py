@@ -38,7 +38,7 @@ def safe_read_csv(file_path_or_buffer):
 
 def detect_file_type(df):
     cols = df.columns.tolist()
-    if 'TST_CellPresDemand' in cols or 'Primary_seal_Gas_Pressure_(barg)' in cols:
+    if 'TST_CellPresDemand' in cols or 'Primary seal Gas Pressure (barg)' in cols:
         return 'main_seal'
     if 'TST_SepSealFlwSet1' in cols or 'Sep_Seal_Flow_Set1' in cols:
         return 'separation_seal'
@@ -54,13 +54,13 @@ def get_column_mapping(file_type):
         return {
             'machine_to_technician': {
                 'TST_SpeedDem': 'Speed_RPM',
-                'TST_CellPresDemand': 'Primary_seal_Gas_Pressure_(barg)',
+                'TST_CellPresDemand': 'Primary seal Gas Pressure (barg)',
                 'TST_InterPresDemand': 'Interspace_Pressure_bar',
                 'TST_InterBPDemand_DE': 'BackPressure_Drive_End_bar',
                 'TST_InterBPDemand_NDE': 'BackPressure_Non_Drive_End_bar',
                 'TST_GasInjectionDemand': 'Gas_Injection_bar',
                 'TST_StepDuration': 'Duration_s',
-                'TST_APFlag': 'Acceptance_point',
+                'TST_APFlag': 'Acceptance point',
                 'TST_TempDemand': 'Temperature_C',
                 'TST_GasType': 'Gas_Type',
                 'TST_TestMode': 'Test_Mode',
@@ -69,13 +69,13 @@ def get_column_mapping(file_type):
             },
             'technician_to_machine': {
                 'Speed_RPM': 'TST_SpeedDem',
-                'Primary_seal_Gas_Pressure_(barg)': 'TST_CellPresDemand',
+                'Primary seal Gas Pressure (barg)': 'TST_CellPresDemand',
                 'Interspace_Pressure_bar': 'TST_InterPresDemand',
                 'BackPressure_Drive_End_bar': 'TST_InterBPDemand_DE',
                 'BackPressure_Non_Drive_End_bar': 'TST_InterBPDemand_NDE',
                 'Gas_Injection_bar': 'TST_GasInjectionDemand',
                 'Duration_s': 'TST_StepDuration',
-                'Acceptance_point': 'TST_APFlag',
+                'Acceptance point': 'TST_APFlag',
                 'Temperature_C': 'TST_TempDemand',
                 'Gas_Type': 'TST_GasType',
                 'Test_Mode': 'TST_TestMode',
@@ -94,7 +94,7 @@ def get_column_mapping(file_type):
                 'TST_SepSealPSet2': 'Sep_Seal_Pressure_Set2',
                 'TST_SepSealControlTyp': 'Sep_Seal_Control_Type',
                 'TST_StepDuration': 'Duration_s',
-                'TST_APFlag': 'Acceptance_point',
+                'TST_APFlag': 'Acceptance point',
                 'TST_TempDemand': 'Temperature_C',
                 'TST_GasType': 'Gas_Type',
                 'TST_MeasurementReq': 'Measurement',
@@ -108,7 +108,7 @@ def get_column_mapping(file_type):
                 'Sep_Seal_Pressure_Set2': 'TST_SepSealPSet2',
                 'Sep_Seal_Control_Type': 'TST_SepSealControlTyp',
                 'Duration_s': 'TST_StepDuration',
-                'Acceptance_point': 'TST_APFlag',
+                'Acceptance point': 'TST_APFlag',
                 'Temperature_C': 'TST_TempDemand',
                 'Gas_Type': 'TST_GasType',
                 'Measurement': 'TST_MeasurementReq',
