@@ -12,17 +12,35 @@ import os
 
 def safe_read_csv(file):
 
-    encodings = ["utf-8","latin-1","cp1252"]
+    encodings = ['utf-8','latin-1','cp1252']
 
     for enc in encodings:
         try:
-            df = pd.read_csv(file,delimiter=";",encoding=enc)
-            return df.replace([np.nan,math.inf,-math.inf],0)
+            df = pd.read_csv(
+                file,
+                delimiter=';',
+                encoding=enc,
+                skipinitialspace=True
+            )
+            return df.replace([np.nan, math.inf, -math.inf],0)
         except:
             pass
 
+    st.error("CSV read failed")
     return pd.DataFrame()
 
+# =====================================================
+# FILE TYPE DETECTION
+# =====================================================
+
+def detect_file_type(df):
+
+    cols = df.columns.tolist()
+
+    if "TST_CellPresDemand" in cols or "Primary seal Gas Pressure (barg)" in cols:
+        return "main_seal"
+
+    return "unknown"
 
 # =====================================================
 # COLUMN MAPPING
@@ -31,9 +49,7 @@ def safe_read_csv(file):
 def get_column_mapping():
 
     return {
-
         "machine_to_technician":{
-
             "TST_SpeedDem":"Speed_RPM",
             "TST_CellPresDemand":"Primary seal Gas Pressure (barg)",
             "TST_InterPresDemand":"Interspace_Pressure_bar",
@@ -47,11 +63,9 @@ def get_column_mapping():
             "TST_TestMode":"Test_Mode",
             "TST_MeasurementReq":"Measurement",
             "TST_TorqueCheck":"Torque_Check"
-
         },
 
         "technician_to_machine":{
-
             "Speed_RPM":"TST_SpeedDem",
             "Primary seal Gas Pressure (barg)":"TST_CellPresDemand",
             "Interspace_Pressure_bar":"TST_InterPresDemand",
@@ -65,11 +79,8 @@ def get_column_mapping():
             "Test_Mode":"TST_TestMode",
             "Measurement":"TST_MeasurementReq",
             "Torque_Check":"TST_TorqueCheck"
-
         }
-
     }
-
 
 # =====================================================
 # MACHINE → TECHNICIAN
@@ -88,138 +99,117 @@ def convert_machine_to_technician(df):
 
     return tech_df
 
-
 # =====================================================
-# PRESSURE VALIDATION
+# VALIDATION + MODE LOGIC
 # =====================================================
 
-def validate_pressure_logic(df):
+def apply_test_logic(df):
 
-    issues = []
+    warnings = []
 
     for i,row in df.iterrows():
 
-        cell = float(row.get("Primary seal Gas Pressure (barg)",0))
-        inter = float(row.get("Interspace_Pressure_bar",0))
+        cell = float(row.get("TST_CellPresDemand",0))
+        inter = float(row.get("TST_InterPresDemand",0))
+        bp_de = float(row.get("TST_InterBPDemand_DE",0))
+        bp_nde = float(row.get("TST_InterBPDemand_NDE",0))
+        mode = int(row.get("TST_TestMode",1))
+
+        # ----------------------------
+        # Pressure validation
+        # ----------------------------
 
         if cell < inter:
+            warnings.append(f"Step {i+1}: Cell pressure lower than interspace")
 
-            issues.append(
-                f"Step {i+1}: Cell ({cell}) < Interspace ({inter})"
-            )
+        # ----------------------------
+        # If technician entered BP
+        # ----------------------------
 
-    if issues:
+        if bp_de > 0 or bp_nde > 0:
+            continue
 
-        st.warning("⚠ Pressure validation warnings")
+        # ----------------------------
+        # INBOARD MODE
+        # ----------------------------
 
-        for msg in issues:
-            st.write(msg)
-
-        return False
-
-    return True
-
-
-# =====================================================
-# TEST MODE ROUTING
-# =====================================================
-
-def apply_test_mode_logic(df):
-
-    df = df.copy()
-
-    for i,row in df.iterrows():
-
-        mode = int(row.get("TST_TestMode",1))
-        inter = float(row.get("TST_InterPresDemand",0))
-
-        # INBOARD
         if mode == 1:
 
-            df.at[i,"TST_InterBPDemand_DE"] = inter
-            df.at[i,"TST_InterBPDemand_NDE"] = inter
-            df.at[i,"TST_InterPresDemand"] = 0
+            if inter > 0:
+                df.at[i,"TST_InterBPDemand_DE"] = inter
+                df.at[i,"TST_InterBPDemand_NDE"] = inter
+                df.at[i,"TST_InterPresDemand"] = 0
 
-        # OUTBOARD
-        elif mode == 2:
+        # ----------------------------
+        # OUTBOARD MODE
+        # ----------------------------
+
+        if mode == 2:
 
             df.at[i,"TST_InterBPDemand_DE"] = 0
             df.at[i,"TST_InterBPDemand_NDE"] = 0
-            df.at[i,"TST_InterPresDemand"] = inter
 
-    return df
-
+    return df,warnings
 
 # =====================================================
-# MACHINE CODE CONVERSION
+# EXCEL EXPORT (PROFESSIONAL FORMAT)
 # =====================================================
 
-def convert_to_machine_codes(df):
-
-    df = df.copy()
-
-    df["TST_APFlag"] = pd.to_numeric(df["TST_APFlag"],errors="coerce").fillna(0).astype(int)
-
-    # Measurement triggered by acceptance point
-    df["TST_MeasurementReq"] = df["TST_APFlag"]
-
-    df["TST_TestMode"] = pd.to_numeric(df["TST_TestMode"],errors="coerce").fillna(1).astype(int)
-
-    return df
-
-
-# =====================================================
-# PROFESSIONAL EXCEL EXPORT
-# =====================================================
-
-def create_professional_excel_from_data(df):
+def create_excel(df):
 
     output = io.BytesIO()
-
-    logo_path = os.path.join(os.path.dirname(__file__),"company_logo.png")
 
     with pd.ExcelWriter(output,engine="xlsxwriter") as writer:
 
         df.to_excel(writer,sheet_name="TEST_SEQUENCE",index=False)
 
-        workbook = writer.book
+        wb = writer.book
         ws = writer.sheets["TEST_SEQUENCE"]
 
-        header = workbook.add_format({
+        header = wb.add_format({
             "bold":True,
-            "text_wrap":True,
-            "align":"center",
             "border":1,
+            "align":"center",
             "fg_color":"#366092",
             "font_color":"white"
         })
 
-        cell = workbook.add_format({
+        cell = wb.add_format({
             "border":1,
             "align":"center"
         })
 
-        for c,col in enumerate(df.columns):
-            ws.write(0,c,col,header)
+        for col,colname in enumerate(df.columns):
+            ws.write(0,col,colname,header)
 
         for r in range(1,len(df)+1):
-            for c,col in enumerate(df.columns):
+            for c in range(len(df.columns)):
                 ws.write(r,c,df.iloc[r-1,c],cell)
 
         ws.set_column(0,len(df.columns)-1,18)
-
-        instr = workbook.add_worksheet("INSTRUCTIONS")
-
-        if os.path.exists(logo_path):
-            instr.insert_image("A1",logo_path)
-
-        date = datetime.now().strftime("%Y-%m-%d")
-        instr.write(10,1,f"Generated {date}")
 
     output.seek(0)
 
     return output
 
+# =====================================================
+# STREAMLIT EDITOR
+# =====================================================
+
+def editable_dataframe(df,key):
+
+    if key not in st.session_state:
+        st.session_state[key] = df.copy()
+
+    edited = st.data_editor(
+        st.session_state[key],
+        use_container_width=True,
+        num_rows="fixed"
+    )
+
+    st.session_state[key] = edited
+
+    return edited
 
 # =====================================================
 # MAIN APP
@@ -227,48 +217,15 @@ def create_professional_excel_from_data(df):
 
 def main():
 
-    st.title("⚙ Seal Test Manager")
+    st.title("⚙️ Seal Test Manager")
 
     operation = st.sidebar.radio(
         "Operation",
-        ["Excel → Machine CSV","Machine CSV → Excel"]
+        [
+            "Machine CSV → Excel",
+            "Excel → Machine CSV"
+        ]
     )
-
-# =====================================================
-# EXCEL → CSV
-# =====================================================
-
-    if operation == "Excel → Machine CSV":
-
-        uploaded = st.file_uploader("Upload Excel",type="xlsx")
-
-        if uploaded:
-
-            df = pd.read_excel(uploaded,sheet_name="TEST_SEQUENCE")
-
-            df = df.dropna(subset=["Step"]).reset_index(drop=True)
-
-            edited = st.data_editor(df,use_container_width=True)
-
-            validate_pressure_logic(edited)
-
-            mapping = get_column_mapping()
-
-            machine = edited.rename(columns=mapping["technician_to_machine"])
-
-            machine = convert_to_machine_codes(machine)
-
-            machine = apply_test_mode_logic(machine)
-
-            machine = machine.drop(columns=["Step","Notes"],errors="ignore")
-
-            st.download_button(
-                "Download Machine CSV",
-                machine.to_csv(index=False,sep=";"),
-                file_name="test_sequence.csv",
-                mime="text/csv"
-            )
-
 
 # =====================================================
 # CSV → EXCEL
@@ -276,23 +233,66 @@ def main():
 
     if operation == "Machine CSV → Excel":
 
-        uploaded = st.file_uploader("Upload CSV",type="csv")
+        file = st.file_uploader("Upload Machine CSV",type=["csv"])
 
-        if uploaded:
+        if file:
 
-            df = safe_read_csv(uploaded)
+            df = safe_read_csv(file)
 
-            tech = convert_machine_to_technician(df)
+            tech_df = convert_machine_to_technician(df)
 
-            excel = create_professional_excel_from_data(tech)
+            edited = editable_dataframe(tech_df,"csv_editor")
+
+            excel = create_excel(edited)
 
             st.download_button(
-                "Download Professional Excel",
-                excel.getvalue(),
-                file_name="technician_sequence.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                "Download Excel",
+                excel,
+                "technician_test_sequence.xlsx"
             )
 
+# =====================================================
+# EXCEL → CSV
+# =====================================================
+
+    if operation == "Excel → Machine CSV":
+
+        file = st.file_uploader("Upload Excel",type=["xlsx"])
+
+        if file:
+
+            df = pd.read_excel(file)
+
+            df = df.dropna(subset=["Step"]).reset_index(drop=True)
+
+            edited = editable_dataframe(df,"excel_editor")
+
+            mapping = get_column_mapping()
+
+            machine = edited.rename(
+                columns=mapping["technician_to_machine"]
+            )
+
+            machine = machine.drop(columns=["Step","Notes"],errors="ignore")
+
+            machine,warnings = apply_test_logic(machine)
+
+            if warnings:
+
+                st.warning("Pressure warnings detected")
+
+                for w in warnings:
+                    st.write(w)
+
+            csv = machine.to_csv(index=False,sep=";")
+
+            st.download_button(
+                "Download Machine CSV",
+                csv,
+                "seal_test_sequence.csv"
+            )
+
+# =====================================================
 
 if __name__ == "__main__":
     main()
