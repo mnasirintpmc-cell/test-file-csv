@@ -1,4 +1,3 @@
-
 import streamlit as st
 import pandas as pd
 from test_rules import TEST_RULES
@@ -13,18 +12,27 @@ def test_builder_ui():
     if "selected_tests" not in st.session_state:
         st.session_state.selected_tests = []
 
-    test = st.selectbox("Select Test",available_tests)
+    col1, col2 = st.columns(2)
 
-    if st.button("Add Test"):
+    with col1:
 
-        st.session_state.selected_tests.append(test)
+        selected_test = st.selectbox(
+            "Select test to add",
+            available_tests
+        )
 
-    if st.button("Clear Sequence"):
-        st.session_state.selected_tests = []
+        if st.button("Add Test"):
 
-    st.write("### Selected Tests")
+            st.session_state.selected_tests.append(selected_test)
 
-    for i,t in enumerate(st.session_state.selected_tests,1):
+    with col2:
+
+        if st.button("Clear Sequence"):
+            st.session_state.selected_tests = []
+
+    st.write("### Test Order")
+
+    for i, t in enumerate(st.session_state.selected_tests, 1):
         st.write(f"{i}. {t}")
 
     if st.button("Generate Test Table"):
@@ -38,8 +46,8 @@ def test_builder_ui():
 
 def generate_test_table(test_list):
 
-    rows=[]
-    step=1
+    rows = []
+    step = 1
 
     for test in test_list:
 
@@ -47,24 +55,24 @@ def generate_test_table(test_list):
 
         rows.append({
 
-            "Step":step,
-            "Test_Name":test,
-            "Speed_RPM":rule.get("rpm",0),
-            "Primary seal Gas Pressure (barg)":0,
-            "Interspace_Pressure_bar":0,
-            "BackPressure_Drive_End_bar":0,
-            "BackPressure_Non_Drive_End_bar":0,
-            "Temperature_C":60 if rule.get("temperature")=="AMB" else 160,
-            "Gas_Type":"Air",
-            "Test_Mode":rule.get("mode",1),
-            "Duration_s":2,
-            "Acceptance point":0,
-            "Measurement":0,
-            "Torque_Check":rule.get("torque",0),
-            "Gas_Injection":0,
-            "Notes":""
+            "Step": step,
+            "Test_Name": test,
+            "Speed_RPM": rule.get("rpm", 0),
+            "Primary seal Gas Pressure (barg)": 0,
+            "Interspace_Pressure_bar": 0,
+            "BackPressure_Drive_End_bar": 0,
+            "BackPressure_Non_Drive_End_bar": 0,
+            "Temperature_C": 60 if rule.get("temperature") == "AMB" else 160,
+            "Gas_Type": "Air",
+            "Test_Mode": rule.get("mode", 1),
+            "Duration_s": 2,
+            "Acceptance point": 0,
+            "Measurement": 0,
+            "Torque_Check": rule.get("torque", 0),
+            "Gas_Injection": 0,
+            "Notes": ""
         })
 
-        step+=1
+        step += 1
 
     return pd.DataFrame(rows)
