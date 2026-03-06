@@ -1,13 +1,13 @@
 import streamlit as st
 import pandas as pd
-from test_rules import TEST_RULES
+from test_rules import test_rules
 
 
 def test_builder_ui():
 
     st.subheader("Test Sequence Builder")
 
-    available_tests = list(TEST_RULES.keys())
+    available_tests = list(test_rules.keys())
 
     if "selected_tests" not in st.session_state:
         st.session_state.selected_tests = []
