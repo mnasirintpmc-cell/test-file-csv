@@ -6,6 +6,7 @@ import numpy as np
 import math
 import os
 
+
 # =====================================================
 # SAFE CSV READER
 # =====================================================
@@ -13,6 +14,7 @@ import os
 def safe_read_csv(file_path_or_buffer):
 
     try:
+
         encodings = ['utf-8','latin-1','cp1252','iso-8859-1']
 
         for enc in encodings:
@@ -127,57 +129,81 @@ def convert_machine_to_technician(df,file_type):
 
 
 # =====================================================
-# FIXED MACHINE CODE CONVERSION
+# PRESSURE VALIDATION
+# =====================================================
+
+def validate_pressure_logic(df):
+
+    issues = []
+
+    for i,row in df.iterrows():
+
+        step = i + 1
+
+        cell = float(row.get('Primary seal Gas Pressure (barg)',0))
+        inter = float(row.get('Interspace_Pressure_bar',0))
+
+        # Rule 1
+        if inter > cell:
+
+            issues.append(
+                f"Step {step}: Interspace ({inter}) > Cell ({cell})"
+            )
+
+        # Rule 2
+        diff = cell - inter
+
+        if diff < 0.2 and inter != 0:
+
+            issues.append(
+                f"Step {step}: Cell-Interspace < 0.2 bar → Interspace must be 0"
+            )
+
+    if issues:
+
+        st.error("⚠️ Pressure Logic Error")
+
+        for msg in issues:
+            st.write(msg)
+
+        return False
+
+    return True
+
+
+# =====================================================
+# MACHINE CODE CONVERSION
 # =====================================================
 
 def convert_to_machine_codes(df):
 
     df = df.copy()
 
-    # Acceptance point numeric handling
+    df['TST_APFlag'] = pd.to_numeric(
+        df['TST_APFlag'],
+        errors='coerce'
+    ).fillna(0).astype(int)
 
-    if 'TST_APFlag' in df.columns:
+    df['TST_MeasurementReq'] = df['TST_APFlag']
 
-        df['TST_APFlag'] = pd.to_numeric(
-            df['TST_APFlag'].replace({'Yes':1,'No':0}),
-            errors='coerce'
-        ).fillna(0).astype(int)
+    df['TST_TorqueCheck'] = pd.to_numeric(
+        df['TST_TorqueCheck'],
+        errors='coerce'
+    ).fillna(0).astype(int)
 
-    if 'TST_MeasurementReq' in df.columns:
+    df['TST_TestMode'] = df['TST_TestMode'].replace({
 
-        df['TST_MeasurementReq'] = pd.to_numeric(
-            df['TST_MeasurementReq'],
-            errors='coerce'
-        ).fillna(0).astype(int)
+        'Inboard':1,
+        'Outboard':2,
+        'Mode 1':1,
+        'Mode 2':2
 
-    if 'TST_TorqueCheck' in df.columns:
+    })
 
-        df['TST_TorqueCheck'] = pd.to_numeric(
-            df['TST_TorqueCheck'],
-            errors='coerce'
-        ).fillna(0).astype(int)
-
-    if 'TST_TestMode' in df.columns:
-
-        df['TST_TestMode'] = df['TST_TestMode'].replace({
-
-            'Inboard':1,
-            'Outboard':2,
-            'Mode 1':1,
-            'Mode 2':2
-
-        })
-
-        df['TST_TestMode'] = pd.to_numeric(
-            df['TST_TestMode'],
-            errors='coerce'
-        ).fillna(1).astype(int)
-
-    # Acceptance point triggers measurement
-
-    if 'TST_APFlag' in df.columns and 'TST_MeasurementReq' in df.columns:
-
-        df.loc[df['TST_APFlag']==1,'TST_MeasurementReq']=1
+    df['TST_TestMode'] = pd.to_numeric(
+        df['TST_TestMode'],
+        errors='coerce'
+    ).fillna(1).astype(int)
 
     return df
 
@@ -188,25 +214,18 @@ def convert_to_machine_codes(df):
 
 def apply_test_mode_logic(df):
 
-    if 'TST_TestMode' not in df.columns:
-        return df
-
     for i,row in df.iterrows():
 
-        secondary = row.get("TST_InterPresDemand",0)
         mode = row.get("TST_TestMode",1)
-
-        # INBOARD
+        inter = row.get("TST_InterPresDemand",0)
 
         if mode == 1:
 
-            df.at[i,"TST_InterBPDemand_DE"] = secondary
-            df.at[i,"TST_InterBPDemand_NDE"] = secondary
+            df.at[i,"TST_InterBPDemand_DE"] = inter
+            df.at[i,"TST_InterBPDemand_NDE"] = inter
             df.at[i,"TST_InterPresDemand"] = 0
 
-        # OUTBOARD
-
-        elif mode == 2:
+        if mode == 2:
 
             df.at[i,"TST_InterBPDemand_DE"] = 0
             df.at[i,"TST_InterBPDemand_NDE"] = 0
@@ -215,7 +234,7 @@ def apply_test_mode_logic(df):
 
 
 # =====================================================
-# EDITABLE DATAFRAME
+# EDITABLE TABLE
 # =====================================================
 
 def editable_dataframe(df,key,height=500):
@@ -231,7 +250,7 @@ def editable_dataframe(df,key,height=500):
             height=height
         )
 
-        submitted = st.form_submit_button("✅ Apply changes")
+        submitted = st.form_submit_button("Apply changes")
 
     if submitted:
 
@@ -242,10 +261,10 @@ def editable_dataframe(df,key,height=500):
 
 
 # =====================================================
-# YOUR ORIGINAL PROFESSIONAL EXCEL EXPORT
+# PROFESSIONAL EXCEL EXPORT
 # =====================================================
 
-def create_professional_excel_from_data(technician_df,file_type):
+def create_professional_excel_from_data(df,file_type):
 
     output = io.BytesIO()
 
@@ -253,46 +272,48 @@ def create_professional_excel_from_data(technician_df,file_type):
 
     with pd.ExcelWriter(output,engine='xlsxwriter') as workbook:
 
-        technician_df.to_excel(workbook,sheet_name='TEST_SEQUENCE',index=False)
+        df.to_excel(workbook,sheet_name='TEST_SEQUENCE',index=False)
 
         wb = workbook.book
         ws = workbook.sheets['TEST_SEQUENCE']
 
         header = wb.add_format({
-            'bold': True,
-            'text_wrap': True,
-            'align': 'center',
-            'border': 1,
-            'fg_color': '#366092',
-            'font_color': 'white'
+            'bold':True,
+            'text_wrap':True,
+            'align':'center',
+            'border':1,
+            'fg_color':'#366092',
+            'font_color':'white'
         })
 
-        cell = wb.add_format({'border': 1, 'align': 'center'})
-        notes = wb.add_format({'border': 1, 'align': 'left'})
+        cell = wb.add_format({'border':1,'align':'center'})
+        notes = wb.add_format({'border':1,'align':'left'})
 
-        for c, col in enumerate(technician_df.columns):
-            ws.write(0, c, col, header)
+        for c,col in enumerate(df.columns):
+            ws.write(0,c,col,header)
 
-        for r in range(1, len(technician_df)+1):
-            for c, col in enumerate(technician_df.columns):
-                ws.write(r, c, technician_df.iloc[r-1, c], notes if col=='Notes' else cell)
+        for r in range(1,len(df)+1):
+            for c,col in enumerate(df.columns):
+                ws.write(r,c,df.iloc[r-1,c],notes if col=="Notes" else cell)
 
-        ws.set_column(0, len(technician_df.columns)-1, 18)
+        ws.set_column(0,len(df.columns)-1,18)
 
-        instr = wb.add_worksheet('INSTRUCTIONS')
+        instr = workbook.add_worksheet("INSTRUCTIONS")
 
         if os.path.exists(logo_path):
 
-            instr.set_column('A:A', 32)
-            instr.set_row(0, 120)
+            instr.set_column('A:A',32)
+            instr.set_row(0,120)
 
             instr.insert_image(
-                'A1',
+                "A1",
                 logo_path,
                 {'x_offset':10,'y_offset':10,'x_scale':0.6,'y_scale':0.6}
             )
 
-        instr.write(12,1,"HOW TO USE THIS FILE")
+        date = datetime.now().strftime("%Y-%m-%d")
+
+        instr.write(12,1,f"TEST SEQUENCE GENERATED {date}")
 
     output.seek(0)
 
@@ -318,13 +339,16 @@ def main():
 
         if uploaded:
 
-            df = pd.read_excel(uploaded,sheet_name='TEST_SEQUENCE')
+            df = pd.read_excel(uploaded,sheet_name="TEST_SEQUENCE")
 
             df = df.dropna(subset=['Step']).reset_index(drop=True)
 
             file_type = detect_file_type(df)
 
             edited = editable_dataframe(df,"excel_editor")
+
+            if not validate_pressure_logic(edited):
+                st.stop()
 
             mapping = get_column_mapping(file_type)
 
@@ -337,14 +361,14 @@ def main():
             machine_df = machine_df.drop(columns=['Step','Notes'],errors='ignore')
 
             st.download_button(
-                "📥 Download Machine CSV",
+                "Download Machine CSV",
                 machine_df.to_csv(index=False,sep=';'),
                 file_name="test_sequence.csv",
                 mime="text/csv"
             )
 
 
-    elif operation == "Machine CSV to Excel":
+    if operation == "Machine CSV to Excel":
 
         uploaded = st.file_uploader("Upload CSV",type=['csv'])
 
@@ -359,10 +383,13 @@ def main():
                 "csv_editor"
             )
 
+            if not validate_pressure_logic(edited):
+                st.stop()
+
             excel = create_professional_excel_from_data(edited,file_type)
 
             st.download_button(
-                "📥 Download Excel",
+                "Download Excel",
                 excel.getvalue(),
                 file_name="technician_sequence.xlsx"
             )
