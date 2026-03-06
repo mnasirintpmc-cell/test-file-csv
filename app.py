@@ -5,7 +5,7 @@ import math
 import io
 
 from test_builder import test_builder_ui
-
+from validator import validate_test_sequence
 
 # =====================================================
 # SAFE CSV READER
