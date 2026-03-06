@@ -1,69 +1,215 @@
 import streamlit as st
 import pandas as pd
-from test_rules import test_rules
+import numpy as np
+import math
+import io
+
+from test_builder import test_builder_ui
 
 
-def test_builder_ui():
+# =====================================================
+# SAFE CSV READER
+# =====================================================
 
-    st.subheader("Test Sequence Builder")
+def safe_read_csv(file):
 
-    available_tests = list(test_rules.keys())
+    encodings = ["utf-8", "latin-1", "cp1252"]
 
-    if "selected_tests" not in st.session_state:
-        st.session_state.selected_tests = []
+    for enc in encodings:
+        try:
+            df = pd.read_csv(file, delimiter=";", encoding=enc)
+            return df.replace([np.nan, math.inf, -math.inf], 0)
+        except:
+            pass
 
-    test = st.selectbox("Select Test",available_tests)
-
-    if st.button("Add Test"):
-
-        st.session_state.selected_tests.append(test)
-
-    if st.button("Clear Sequence"):
-        st.session_state.selected_tests = []
-
-    st.write("### Selected Tests")
-
-    for i,t in enumerate(st.session_state.selected_tests,1):
-        st.write(f"{i}. {t}")
-
-    if st.button("Generate Test Table"):
-
-        df = generate_test_table(st.session_state.selected_tests)
-
-        st.session_state.generated_test = df
-
-        st.dataframe(df)
+    st.error("CSV read error")
+    return pd.DataFrame()
 
 
-def generate_test_table(test_list):
+# =====================================================
+# COLUMN MAPPING
+# =====================================================
 
-    rows=[]
-    step=1
+def get_column_mapping():
 
-    for test in test_list:
+    return {
 
-        rule = TEST_RULES[test]
+        "machine_to_technician": {
 
-        rows.append({
+            "TST_SpeedDem": "Speed_RPM",
+            "TST_CellPresDemand": "Primary seal Gas Pressure (barg)",
+            "TST_InterPresDemand": "Interspace_Pressure_bar",
+            "TST_InterBPDemand_DE": "BackPressure_Drive_End_bar",
+            "TST_InterBPDemand_NDE": "BackPressure_Non_Drive_End_bar",
+            "TST_GasInjectionDemand": "Gas_Injection",
+            "TST_StepDuration": "Duration_s",
+            "TST_APFlag": "Acceptance point",
+            "TST_TempDemand": "Temperature_C",
+            "TST_GasType": "Gas_Type",
+            "TST_TestMode": "Test_Mode",
+            "TST_MeasurementReq": "Measurement",
+            "TST_TorqueCheck": "Torque_Check"
 
-            "Step":step,
-            "Test_Name":test,
-            "Speed_RPM":rule.get("rpm",0),
-            "Primary seal Gas Pressure (barg)":0,
-            "Interspace_Pressure_bar":0,
-            "BackPressure_Drive_End_bar":0,
-            "BackPressure_Non_Drive_End_bar":0,
-            "Temperature_C":60 if rule.get("temperature")=="AMB" else 160,
-            "Gas_Type":"Air",
-            "Test_Mode":rule.get("mode",1),
-            "Duration_s":2,
-            "Acceptance point":0,
-            "Measurement":0,
-            "Torque_Check":rule.get("torque",0),
-            "Gas_Injection":0,
-            "Notes":""
-        })
+        },
 
-        step+=1
+        "technician_to_machine": {
 
-    return pd.DataFrame(rows)
+            "Speed_RPM": "TST_SpeedDem",
+            "Primary seal Gas Pressure (barg)": "TST_CellPresDemand",
+            "Interspace_Pressure_bar": "TST_InterPresDemand",
+            "BackPressure_Drive_End_bar": "TST_InterBPDemand_DE",
+            "BackPressure_Non_Drive_End_bar": "TST_InterBPDemand_NDE",
+            "Gas_Injection": "TST_GasInjectionDemand",
+            "Duration_s": "TST_StepDuration",
+            "Acceptance point": "TST_APFlag",
+            "Temperature_C": "TST_TempDemand",
+            "Gas_Type": "TST_GasType",
+            "Test_Mode": "TST_TestMode",
+            "Measurement": "TST_MeasurementReq",
+            "Torque_Check": "TST_TorqueCheck"
+
+        }
+    }
+
+
+# =====================================================
+# APPLY BP LOGIC
+# =====================================================
+
+def apply_test_logic(df):
+
+    warnings = []
+
+    for i, row in df.iterrows():
+
+        cell = float(row.get("TST_CellPresDemand", 0))
+        inter = float(row.get("TST_InterPresDemand", 0))
+        bp_de = float(row.get("TST_InterBPDemand_DE", 0))
+        bp_nde = float(row.get("TST_InterBPDemand_NDE", 0))
+        mode = int(row.get("TST_TestMode", 1))
+
+        if cell < inter:
+            warnings.append(f"Step {i+1}: Cell pressure lower than interspace")
+
+        if bp_de > 0 or bp_nde > 0:
+            continue
+
+        if mode == 1:
+
+            if inter > 0:
+
+                df.at[i, "TST_InterBPDemand_DE"] = inter
+                df.at[i, "TST_InterBPDemand_NDE"] = inter
+                df.at[i, "TST_InterPresDemand"] = 0
+
+        elif mode == 2:
+
+            df.at[i, "TST_InterBPDemand_DE"] = 0
+            df.at[i, "TST_InterBPDemand_NDE"] = 0
+
+    return df, warnings
+
+
+# =====================================================
+# EXCEL EXPORT
+# =====================================================
+
+def create_excel(df):
+
+    output = io.BytesIO()
+
+    with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+
+        df.to_excel(writer, sheet_name="TEST_SEQUENCE", index=False)
+
+    output.seek(0)
+
+    return output
+
+
+# =====================================================
+# MAIN APP
+# =====================================================
+
+def main():
+
+    st.title("Seal Test Manager")
+
+    operation = st.sidebar.radio(
+
+        "Operation",
+
+        [
+            "Machine CSV → Technician Excel",
+            "Technician Excel → Machine CSV",
+            "Test Builder"
+        ]
+
+    )
+
+    if operation == "Machine CSV → Technician Excel":
+
+        file = st.file_uploader("Upload CSV", type=["csv"])
+
+        if file:
+
+            df = safe_read_csv(file)
+
+            st.dataframe(df)
+
+    elif operation == "Technician Excel → Machine CSV":
+
+        file = st.file_uploader("Upload Excel", type=["xlsx"])
+
+        if file:
+
+            df = pd.read_excel(file)
+
+            mapping = get_column_mapping()
+
+            machine = df.rename(columns=mapping["technician_to_machine"])
+
+            machine, warnings = apply_test_logic(machine)
+
+            if warnings:
+
+                st.warning("Pressure warnings")
+
+                for w in warnings:
+                    st.write(w)
+
+            csv = machine.to_csv(index=False, sep=";")
+
+            st.download_button(
+
+                "Download CSV",
+
+                csv,
+
+                file_name="seal_test_sequence.csv"
+
+            )
+
+    elif operation == "Test Builder":
+
+        test_builder_ui()
+
+        if "generated_test" in st.session_state:
+
+            df = st.session_state.generated_test
+
+            excel = create_excel(df)
+
+            st.download_button(
+
+                "Download Generated Excel",
+
+                excel,
+
+                file_name="generated_test_sequence.xlsx"
+
+            )
+
+
+if __name__ == "__main__":
+    main()
