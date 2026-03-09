@@ -1,156 +1,120 @@
+import streamlit as st
 import pandas as pd
+import io
+from spec_scanner import scan_spec_sheet
+from validator import validate_sequence
 
+st.set_page_config(layout="wide")
 
-def read_excel_auto(file):
+st.title("Seal Test Manager")
 
-    name = file.name.lower()
+operation = st.sidebar.radio(
+    "Operation",
+    [
+        "📤 Machine CSV → Technician Excel",
+        "🔄 Technician Excel → Machine CSV",
+        "🧠 Spec Excel → Technician Excel"
+    ]
+)
 
-    if name.endswith(".xlsb"):
-        return pd.read_excel(file, header=None, engine="pyxlsb")
+# ---------------------------------------------------
+# CSV → Technician Excel
+# ---------------------------------------------------
 
-    return pd.read_excel(file, header=None)
+if operation == "📤 Machine CSV → Technician Excel":
 
+    uploaded = st.file_uploader("Upload Machine CSV", type=["csv"])
 
-def detect_mode(title):
+    if uploaded:
 
-    title = str(title).lower()
+        df = pd.read_csv(uploaded, delimiter=";")
 
-    if "secondary" in title:
-        return 2
+        tech_df = df.copy()
 
-    if "primary" in title:
-        return 1
+        tech_df.insert(0,"Step",range(1,len(tech_df)+1))
 
-    return 1
+        st.dataframe(tech_df)
 
+        output = io.BytesIO()
 
-def compute_primary(primary_spec, secondary):
+        with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+            tech_df.to_excel(writer,index=False)
 
-    text = str(primary_spec).lower()
-
-    if "secondary" in text:
-        return float(secondary) + 5
-
-    try:
-        return float(primary_spec)
-    except:
-        return float(secondary) + 5
-
-
-def apply_pressure_rules(mode, secondary):
-
-    if mode == 1:
-
-        interspace = 0
-        bp_de = secondary
-        bp_nde = secondary
-
-    else:
-
-        interspace = secondary
-        bp_de = 0
-        bp_nde = 0
-
-    return interspace, bp_de, bp_nde
-
-
-def scan_spec_sheet(file):
-
-    raw = read_excel_auto(file)
-
-    rows = []
-
-    current_mode = 1
-    header_found = False
-
-    for _, r in raw.iterrows():
-
-        text = str(r[0])
-
-        if "primary" in text.lower() or "secondary" in text.lower():
-
-            current_mode = detect_mode(text)
-            continue
-
-
-        if "test step" in text.lower():
-
-            header_found = True
-            continue
-
-
-        if not header_found:
-            continue
-
-
-        try:
-
-            primary_spec = r[1]
-            secondary = r[2]
-            speed = r[3]
-            temp = r[4]
-            hold = r[5]
-            remarks = str(r[8])
-
-        except:
-            continue
-
-
-        if pd.isna(secondary):
-            continue
-
-
-        secondary = float(secondary)
-
-        primary = compute_primary(primary_spec, secondary)
-
-        interspace, bp_de, bp_nde = apply_pressure_rules(
-            current_mode,
-            secondary
+        st.download_button(
+            "Download Technician Excel",
+            output.getvalue(),
+            "technician_sequence.xlsx"
         )
 
 
-        if str(temp).upper() == "AMB":
-            temp = 60
+# ---------------------------------------------------
+# Technician Excel → Machine CSV
+# ---------------------------------------------------
+
+elif operation == "🔄 Technician Excel → Machine CSV":
+
+    uploaded = st.file_uploader("Upload Technician Excel", type=["xlsx"])
+
+    if uploaded:
+
+        df = pd.read_excel(uploaded)
+
+        machine_df = df.drop(columns=["Step","Notes"], errors="ignore")
+
+        st.dataframe(machine_df)
+
+        csv = machine_df.to_csv(index=False, sep=";")
+
+        st.download_button(
+            "Download Machine CSV",
+            csv,
+            "machine_sequence.csv"
+        )
 
 
-        ap_flag = 1 if "acceptance" in remarks.lower() else 0
+# ---------------------------------------------------
+# SPEC → Technician Excel
+# ---------------------------------------------------
 
+elif operation == "🧠 Spec Excel → Technician Excel":
 
-        rows.append({
+    uploaded = st.file_uploader(
+        "Upload Spec File",
+        type=["xlsx","xlsb"]
+    )
 
-            "Speed_RPM": speed,
+    if uploaded:
 
-            "Primary seal Gas Pressure (barg)": primary,
+        tech_df = scan_spec_sheet(uploaded)
 
-            "Interspace_Pressure_bar": interspace,
+        st.subheader("Generated Technician Table")
 
-            "BackPressure_Drive_End_bar": bp_de,
+        st.dataframe(tech_df)
 
-            "BackPressure_Non_Drive_End_bar": bp_nde,
+        warnings = validate_sequence(tech_df)
 
-            "Gas_Injection_bar": 0,
+        if warnings:
 
-            "Duration_s": float(hold) * 60,
+            st.warning("Validation warnings")
 
-            "Acceptance point": ap_flag,
+            for w in warnings:
+                st.write(w)
 
-            "Temperature_C": temp,
+        output = io.BytesIO()
 
-            "Gas_Type": "Air",
+        with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+            tech_df.to_excel(writer,index=False)
 
-            "Test_Mode": current_mode,
+        st.download_button(
+            "Download Technician Excel",
+            output.getvalue(),
+            "spec_converted.xlsx"
+        )
 
-            "Measurement": ap_flag,
+        csv = tech_df.to_csv(index=False, sep=";")
 
-            "Torque_Check": 0,
-
-            "Notes": remarks
-
-        })
-
-    df = pd.DataFrame(rows)
-
-    df.insert(0,"Step",range(1,len(df)+1))
-
-    return df
+        st.download_button(
+            "Download Machine CSV",
+            csv,
+            "spec_converted.csv"
+        )
