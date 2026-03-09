@@ -2,21 +2,19 @@ def validate_sequence(df):
 
     warnings = []
 
-    for i, r in df.iterrows():
+    for i, row in df.iterrows():
 
-        cell = r["Primary seal Gas Pressure (barg)"]
-        inter = r["Interspace_Pressure_bar"]
+        cell = row["Primary seal Gas Pressure (barg)"]
+        inter = row["Interspace_Pressure_bar"]
 
-        if cell <= inter:
-
+        if cell < inter:
             warnings.append(
-                f"Row {i+1}: Cell pressure must be greater than Interspace"
+                f"Step {i+1}: Primary pressure lower than interspace"
             )
 
-        if (cell - inter) < 0.2:
-
+        if cell - inter < 0.2 and inter > 0:
             warnings.append(
-                f"Row {i+1}: Cell − Interspace < 0.2 bar"
+                f"Step {i+1}: Primary-interspace < 0.2 bar"
             )
 
     return warnings
