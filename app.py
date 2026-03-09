@@ -1,62 +1,156 @@
-import streamlit as st
 import pandas as pd
-from spec_scanner import scan_spec_sheet
-from validator import validate_sequence
 
 
-st.set_page_config(layout="wide")
+def read_excel_auto(file):
 
-st.title("Seal Test Spec → Technician Converter")
+    name = file.name.lower()
 
+    if name.endswith(".xlsb"):
+        return pd.read_excel(file, header=None, engine="pyxlsb")
 
-uploaded = st.file_uploader(
-    "Upload Specification Excel",
-    type=["xlsx"]
-)
-
-
-if uploaded:
-
-    st.subheader("Scanning specification...")
-
-    tech_df = scan_spec_sheet(uploaded)
-
-    st.subheader("Generated Technician Table")
-
-    st.dataframe(tech_df)
+    return pd.read_excel(file, header=None)
 
 
-    warnings = validate_sequence(tech_df)
+def detect_mode(title):
 
-    if warnings:
+    title = str(title).lower()
 
-        st.warning("Validation warnings")
+    if "secondary" in title:
+        return 2
 
-        for w in warnings:
-            st.write(w)
+    if "primary" in title:
+        return 1
 
-
-    csv = tech_df.to_csv(index=False, sep=";")
-
-
-    st.download_button(
-
-        "Download Machine CSV",
-        csv,
-        file_name="seal_test_sequence.csv",
-        mime="text/csv"
-    )
+    return 1
 
 
-    excel_buffer = tech_df.to_excel(
-        "technician_output.xlsx",
-        index=False
-    )
+def compute_primary(primary_spec, secondary):
+
+    text = str(primary_spec).lower()
+
+    if "secondary" in text:
+        return float(secondary) + 5
+
+    try:
+        return float(primary_spec)
+    except:
+        return float(secondary) + 5
 
 
-    st.download_button(
+def apply_pressure_rules(mode, secondary):
 
-        "Download Technician Excel",
-        open("technician_output.xlsx", "rb"),
-        file_name="technician_output.xlsx"
-    )
+    if mode == 1:
+
+        interspace = 0
+        bp_de = secondary
+        bp_nde = secondary
+
+    else:
+
+        interspace = secondary
+        bp_de = 0
+        bp_nde = 0
+
+    return interspace, bp_de, bp_nde
+
+
+def scan_spec_sheet(file):
+
+    raw = read_excel_auto(file)
+
+    rows = []
+
+    current_mode = 1
+    header_found = False
+
+    for _, r in raw.iterrows():
+
+        text = str(r[0])
+
+        if "primary" in text.lower() or "secondary" in text.lower():
+
+            current_mode = detect_mode(text)
+            continue
+
+
+        if "test step" in text.lower():
+
+            header_found = True
+            continue
+
+
+        if not header_found:
+            continue
+
+
+        try:
+
+            primary_spec = r[1]
+            secondary = r[2]
+            speed = r[3]
+            temp = r[4]
+            hold = r[5]
+            remarks = str(r[8])
+
+        except:
+            continue
+
+
+        if pd.isna(secondary):
+            continue
+
+
+        secondary = float(secondary)
+
+        primary = compute_primary(primary_spec, secondary)
+
+        interspace, bp_de, bp_nde = apply_pressure_rules(
+            current_mode,
+            secondary
+        )
+
+
+        if str(temp).upper() == "AMB":
+            temp = 60
+
+
+        ap_flag = 1 if "acceptance" in remarks.lower() else 0
+
+
+        rows.append({
+
+            "Speed_RPM": speed,
+
+            "Primary seal Gas Pressure (barg)": primary,
+
+            "Interspace_Pressure_bar": interspace,
+
+            "BackPressure_Drive_End_bar": bp_de,
+
+            "BackPressure_Non_Drive_End_bar": bp_nde,
+
+            "Gas_Injection_bar": 0,
+
+            "Duration_s": float(hold) * 60,
+
+            "Acceptance point": ap_flag,
+
+            "Temperature_C": temp,
+
+            "Gas_Type": "Air",
+
+            "Test_Mode": current_mode,
+
+            "Measurement": ap_flag,
+
+            "Torque_Check": 0,
+
+            "Notes": remarks
+
+        })
+
+    df = pd.DataFrame(rows)
+
+    df.insert(0,"Step",range(1,len(df)+1))
+
+    return df
