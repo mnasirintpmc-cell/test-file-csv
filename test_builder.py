@@ -1,20 +1,31 @@
-def validate_sequence(df):
+import pandas as pd
 
-    warnings = []
 
-    for i, row in df.iterrows():
+class TestBuilder:
 
-        cell = row["Primary seal Gas Pressure (barg)"]
-        inter = row["Interspace_Pressure_bar"]
+    def __init__(self):
+        self.tests = []
 
-        if cell < inter:
-            warnings.append(
-                f"Step {i+1}: Primary pressure lower than interspace"
-            )
+    def add_test(self, df):
+        """
+        Add a test dataframe to the sequence
+        """
+        if df is None or df.empty:
+            return
 
-        if cell - inter < 0.2 and inter > 0:
-            warnings.append(
-                f"Step {i+1}: Primary-interspace < 0.2 bar"
-            )
+        self.tests.append(df)
 
-    return warnings
+    def build(self):
+        """
+        Combine all loaded tests and rebuild step numbers
+        """
+        if not self.tests:
+            return pd.DataFrame()
+
+        combined = pd.concat(self.tests, ignore_index=True)
+
+        combined["Step"] = range(1, len(combined) + 1)
+
+        cols = ["Step"] + [c for c in combined.columns if c != "Step"]
+
+        return combined[cols]
