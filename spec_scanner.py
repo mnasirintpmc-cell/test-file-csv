@@ -1,17 +1,40 @@
 import pandas as pd
 
 
+def read_excel_auto(file):
+
+    name = file.name.lower()
+
+    if name.endswith(".xlsb"):
+        return pd.read_excel(file, header=None, engine="pyxlsb")
+
+    return pd.read_excel(file, header=None)
+
+
 def detect_mode(title):
 
     title = str(title).lower()
 
-    if "primary" in title:
-        return 1
-
     if "secondary" in title:
         return 2
 
+    if "primary" in title:
+        return 1
+
     return 1
+
+
+def compute_primary(primary_spec, secondary):
+
+    text = str(primary_spec).lower()
+
+    if "secondary" in text:
+        return float(secondary) + 5
+
+    try:
+        return float(primary_spec)
+    except:
+        return float(secondary) + 5
 
 
 def apply_pressure_rules(mode, secondary):
@@ -31,35 +54,22 @@ def apply_pressure_rules(mode, secondary):
     return interspace, bp_de, bp_nde
 
 
-def compute_primary(primary_spec, secondary):
-
-    text = str(primary_spec).lower()
-
-    if "secondary" in text:
-        return float(secondary) + 5
-
-    try:
-        return float(primary_spec)
-    except:
-        return float(secondary) + 5
-
-
 def scan_spec_sheet(file):
 
-    raw = pd.read_excel(file, header=None)
+    raw = read_excel_auto(file)
 
     rows = []
 
-    mode = 1
+    current_mode = 1
     header_found = False
 
-    for i, row in raw.iterrows():
+    for _, r in raw.iterrows():
 
-        text = str(row[0])
+        text = str(r[0])
 
         if "primary" in text.lower() or "secondary" in text.lower():
 
-            mode = detect_mode(text)
+            current_mode = detect_mode(text)
             continue
 
 
@@ -75,12 +85,12 @@ def scan_spec_sheet(file):
 
         try:
 
-            primary_spec = row[1]
-            secondary = row[2]
-            speed = row[3]
-            temp = row[4]
-            hold = row[5]
-            remarks = str(row[8])
+            primary_spec = r[1]
+            secondary = r[2]
+            speed = r[3]
+            temp = r[4]
+            hold = r[5]
+            remarks = str(r[8])
 
         except:
             continue
@@ -95,7 +105,7 @@ def scan_spec_sheet(file):
         primary = compute_primary(primary_spec, secondary)
 
         interspace, bp_de, bp_nde = apply_pressure_rules(
-            mode,
+            current_mode,
             secondary
         )
 
@@ -104,31 +114,43 @@ def scan_spec_sheet(file):
             temp = 60
 
 
-        ap = 1 if "acceptance" in remarks.lower() else 0
+        ap_flag = 1 if "acceptance" in remarks.lower() else 0
 
 
         rows.append({
 
             "Speed_RPM": speed,
+
             "Primary seal Gas Pressure (barg)": primary,
+
             "Interspace_Pressure_bar": interspace,
+
             "BackPressure_Drive_End_bar": bp_de,
+
             "BackPressure_Non_Drive_End_bar": bp_nde,
+
             "Gas_Injection_bar": 0,
-            "Duration_s": hold * 60,
-            "Acceptance point": ap,
+
+            "Duration_s": float(hold) * 60,
+
+            "Acceptance point": ap_flag,
+
             "Temperature_C": temp,
+
             "Gas_Type": "Air",
-            "Test_Mode": mode,
-            "Measurement": ap,
+
+            "Test_Mode": current_mode,
+
+            "Measurement": ap_flag,
+
             "Torque_Check": 0,
+
             "Notes": remarks
 
         })
 
-
     df = pd.DataFrame(rows)
 
-    df.insert(0, "Step", range(1, len(df)+1))
+    df.insert(0,"Step",range(1,len(df)+1))
 
     return df
