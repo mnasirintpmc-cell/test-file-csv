@@ -44,7 +44,7 @@ def scan_spec(file):
                 speed = r[3]
                 temp = r[4]
                 hold = r[5]
-                remarks = str(r[8])
+                remarks = str(r[8]) if len(r) > 8 else ""
 
             except:
                 continue
@@ -66,7 +66,14 @@ def scan_spec(file):
             if str(temp).upper() == "AMB":
                 temp = 60
 
-            # Pressure rules
+            hold = 0 if pd.isna(hold) else hold
+
+            try:
+                speed = float(speed)
+            except:
+                speed = 0
+
+            # Pressure routing
             if mode == 1:
                 interspace = 0
                 bp_de = secondary
@@ -87,15 +94,15 @@ def scan_spec(file):
                 "BackPressure_Drive_End_bar": bp_de,
                 "BackPressure_Non_Drive_End_bar": bp_nde,
                 "Gas_Injection_bar": 0,
-                "Duration_s": hold * 60,
+                "Duration_s": int(hold * 60),
                 "Acceptance point": ap,
                 "Temperature_C": temp,
                 "Gas_Type": "Air",
                 "Test_Mode": mode,
                 "Measurement": ap,
                 "Torque_Check": 0,
-                "Notes": remarks
-
+                "Notes": remarks,
+                "Spec_Sheet": sheet_name
             })
 
     df = pd.DataFrame(rows)
