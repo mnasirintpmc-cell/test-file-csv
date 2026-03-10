@@ -6,19 +6,21 @@ class TestBuilder:
     def __init__(self):
         self.tests = []
 
-    def add_test(self, df):
-        """
-        Add a test dataframe to the sequence
-        """
+    def add_test(self, df, name="Test"):
+
         if df is None or df.empty:
             return
+
+        df = df.copy()
+
+        df = df.drop(columns=["Step"], errors="ignore")
+
+        df["Test_Name"] = name
 
         self.tests.append(df)
 
     def build(self):
-        """
-        Combine all loaded tests and rebuild step numbers
-        """
+
         if not self.tests:
             return pd.DataFrame()
 
