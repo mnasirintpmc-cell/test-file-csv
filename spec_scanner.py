@@ -99,7 +99,7 @@ def scan_spec(file):
                     if primary is None and secondary is not None:
                         primary = secondary + 5
 
-                    # Temperature
+                    # Temperature rule
                     if isinstance(temp, str) and temp.upper() == "AMB":
                         temp = 60
 
@@ -108,13 +108,8 @@ def scan_spec(file):
                     if hold is not None:
                         duration = int(hold * 60)
 
-                    # Correct acceptance logic
-                    if remarks is None or pd.isna(remarks) or str(remarks).strip() == "":
-                        notes = None
-                        acceptance = 0
-                    else:
-                        notes = str(remarks).strip()
-                        acceptance = 1
+                    # Notes handling
+                    notes = remarks
 
                     # Pressure routing
                     interspace = None
@@ -146,11 +141,6 @@ def scan_spec(file):
                         "Temperature_C": temp,
 
                         "Test_Mode": test_mode,
-                        "Acceptance point": acceptance,
-                        "Measurement": 1,
-                        "Torque_Check": None,
-                        "Gas_Type": "Air",
-
                         "Notes": notes
                     })
 
@@ -165,7 +155,13 @@ def scan_spec(file):
 
     df = df.drop(columns=["Spec_Step"])
 
+    # Convert missing values to NA
     df = df.fillna("NA")
+
+    # Acceptance rule
+    df["Acceptance point"] = df["Notes"].apply(
+        lambda x: 0 if str(x).strip().upper() == "NA" else 1
+    )
 
     df = df[["Step"] + [c for c in df.columns if c != "Step"]]
 
