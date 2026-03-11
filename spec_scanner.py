@@ -35,9 +35,6 @@ def scan_spec(file):
         if df is None or df.empty:
             continue
 
-        # ---------------------------------------
-        # Determine Test_Mode
-        # ---------------------------------------
         test_mode = 1
         if "secondary" in sheet_name.lower():
             test_mode = 2
@@ -61,7 +58,9 @@ def scan_spec(file):
                         if step_val is None:
                             continue
 
-                        if "end of" in str(step_val).lower():
+                        text = str(step_val).lower()
+
+                        if "end of" in text:
                             break
 
                         try:
@@ -76,10 +75,6 @@ def scan_spec(file):
                         hold = to_float(safe_get(row, step_col + 5))
                         remarks = safe_get(row, step_col + 8)
 
-                        # ---------------------------------------
-                        # Primary Pressure Logic
-                        # ---------------------------------------
-
                         primary = None
 
                         if isinstance(primary_cell, str) and "secondary" in primary_cell.lower():
@@ -91,38 +86,15 @@ def scan_spec(file):
                         if primary is None and secondary is not None:
                             primary = secondary + 5
 
-                        # ---------------------------------------
-                        # Speed
-                        # ---------------------------------------
-
-                        if speed is None:
-                            speed = None
-
-                        # ---------------------------------------
-                        # Temperature
-                        # ---------------------------------------
-
                         if isinstance(temp, str) and temp.upper() == "AMB":
                             temp = 60
-
-                        # ---------------------------------------
-                        # Duration
-                        # ---------------------------------------
 
                         duration = None
                         if hold is not None:
                             duration = int(hold * 60)
 
-                        # ---------------------------------------
-                        # Notes / Acceptance
-                        # ---------------------------------------
-
                         notes = remarks if remarks not in [None, "", "NA"] else None
                         acceptance = 1 if notes else 0
-
-                        # ---------------------------------------
-                        # Pressure Routing
-                        # ---------------------------------------
 
                         interspace = None
                         bp_de = None
@@ -137,8 +109,8 @@ def scan_spec(file):
 
                         rows.append({
 
-                            "Test_Name": sheet_name,
                             "Spec_Step": spec_step,
+                            "Test_Name": sheet_name,
 
                             "Speed_RPM": speed,
                             "Primary seal Gas Pressure (barg)": primary,
@@ -168,11 +140,8 @@ def scan_spec(file):
 
     df = df.sort_values(["Test_Name", "Spec_Step"])
 
-    # ---------------------------------------
-    # Reset Step numbering per test
-    # ---------------------------------------
-
-    df["Step"] = df.groupby("Test_Name").cumcount() + 1
+    # Correct step numbering
+    df["Step"] = df["Spec_Step"]
 
     df = df.drop(columns=["Spec_Step"])
 
