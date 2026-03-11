@@ -1,4 +1,5 @@
 import pandas as pd
+import re
 
 try:
     import pyxlsb
@@ -19,23 +20,20 @@ def scan_spec(file):
 
     rows = []
 
+    # --------------------------------------------------
+    # Process ALL sheets
+    # --------------------------------------------------
+
     for sheet_name, df in sheets.items():
-
-        name = sheet_name.lower()
-
-        # --------------------------------------------------
-        # Only process TEST sheets
-        # --------------------------------------------------
-
-        if "test" not in name:
-            continue
 
         mode = 1
 
         for _, r in df.iterrows():
 
-            text = str(r[0]).lower()
+            value = str(r[0]).strip()
+            text = value.lower()
 
+            # Detect test mode
             if "primary" in text:
                 mode = 1
                 continue
@@ -44,14 +42,13 @@ def scan_spec(file):
                 mode = 2
                 continue
 
-            # --------------------------------------------------
-            # Detect numeric test step
-            # --------------------------------------------------
+            # Detect step number
+            match = re.search(r"\d+", value)
 
-            try:
-                spec_step = int(r[0])
-            except:
+            if not match:
                 continue
+
+            spec_step = int(match.group())
 
             primary_spec = r[1]
             secondary = r[2]
@@ -119,13 +116,13 @@ def scan_spec(file):
                 "Measurement": ap,
                 "Torque_Check": 0,
                 "Notes": remarks,
-                "Spec_Sheet": sheet_name
+                "Test_Name": sheet_name
 
             })
 
     if not rows:
         raise ValueError(
-            "No test steps found in sheets containing 'Test'"
+            "No numeric test steps found in any sheet"
         )
 
     df = pd.DataFrame(rows)
