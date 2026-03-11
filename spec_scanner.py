@@ -6,21 +6,17 @@ except ImportError:
     raise ImportError("Install pyxlsb with: pip install pyxlsb")
 
 
-def safe_get(row, index):
-    """Safely get column value or NA"""
-    if index < len(row):
-        val = row[index]
-        if pd.isna(val):
-            return "NA"
-        return val
-    return "NA"
+def safe_get(row, idx):
+    if idx < len(row):
+        return row[idx]
+    return None
 
 
-def to_float(val, default="NA"):
+def to_float(v):
     try:
-        return float(val)
+        return float(v)
     except:
-        return default
+        return None
 
 
 def scan_spec(file):
@@ -36,7 +32,7 @@ def scan_spec(file):
 
     for sheet_name, df in sheets.items():
 
-        if df is None or df.empty:
+        if df.empty:
             continue
 
         for i in range(len(df)):
@@ -49,16 +45,16 @@ def scan_spec(file):
 
                     step_col = j
 
-                    # read table rows
                     for k in range(i + 1, len(df)):
 
                         row = df.iloc[k].tolist()
 
                         step_val = safe_get(row, step_col)
 
-                        text = str(step_val).lower()
+                        if step_val is None:
+                            continue
 
-                        if "end of" in text:
+                        if "end of" in str(step_val).lower():
                             break
 
                         try:
@@ -66,25 +62,29 @@ def scan_spec(file):
                         except:
                             continue
 
-                        primary = safe_get(row, step_col + 1)
-                        secondary = safe_get(row, step_col + 2)
-                        speed = safe_get(row, step_col + 3)
+                        primary = to_float(safe_get(row, step_col + 1))
+                        secondary = to_float(safe_get(row, step_col + 2))
+                        speed = to_float(safe_get(row, step_col + 3))
                         temp = safe_get(row, step_col + 4)
-                        hold = safe_get(row, step_col + 5)
+                        hold = to_float(safe_get(row, step_col + 5))
                         remarks = safe_get(row, step_col + 8)
 
-                        primary = to_float(primary, "NA")
-                        secondary = to_float(secondary, "NA")
-                        speed = to_float(speed, "NA")
-                        hold = to_float(hold, 0)
+                        if primary is None and secondary is not None:
+                            primary = secondary + 5
 
-                        if temp != "NA":
-                            if str(temp).upper() == "AMB":
-                                temp = 60
+                        if speed is None:
+                            speed = 0
 
-                        duration = "NA"
-                        if hold != "NA":
-                            duration = int(float(hold) * 60)
+                        if isinstance(temp, str) and temp.upper() == "AMB":
+                            temp = 60
+
+                        duration = None
+                        if hold is not None:
+                            duration = int(hold * 60)
+
+                        notes = remarks if remarks not in [None, "", "NA"] else None
+
+                        acceptance = 1 if notes else 0
 
                         rows.append({
 
@@ -93,20 +93,20 @@ def scan_spec(file):
 
                             "Speed_RPM": speed,
                             "Primary seal Gas Pressure (barg)": primary,
-                            "Interspace_Pressure_bar": "NA",
+                            "Interspace_Pressure_bar": None,
                             "BackPressure_Drive_End_bar": secondary,
                             "BackPressure_Non_Drive_End_bar": secondary,
-                            "Gas_Injection_bar": "NA",
+                            "Gas_Injection_bar": None,
 
                             "Duration_s": duration,
                             "Temperature_C": temp,
 
-                            "Acceptance point": "NA",
+                            "Acceptance point": acceptance,
                             "Measurement": 1,
-                            "Torque_Check": "NA",
+                            "Torque_Check": None,
                             "Gas_Type": "Air",
 
-                            "Notes": remarks
+                            "Notes": notes
                         })
 
     if not rows:
@@ -119,5 +119,7 @@ def scan_spec(file):
     df.insert(0, "Step", range(1, len(df) + 1))
 
     df = df.drop(columns=["Spec_Step"])
+
+    df = df.fillna("NA")
 
     return df
