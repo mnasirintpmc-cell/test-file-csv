@@ -16,6 +16,7 @@ operation = st.sidebar.radio(
     [
 
         "📤 Machine CSV → Technician Excel",
+        "🔄 Technician Excel → Machine CSV",
         "📄 Spec → Technician Excel"
 
     ]
@@ -23,23 +24,27 @@ operation = st.sidebar.radio(
 )
 
 
+# --------------------------------------------------
+# Excel formatting
+# --------------------------------------------------
+
 def format_excel(df):
 
     output = io.BytesIO()
 
     with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
 
-        df.to_excel(writer, index=False, sheet_name="Test Sequence")
+        df.to_excel(writer, index=False, sheet_name="Sequence")
 
         workbook = writer.book
-        worksheet = writer.sheets["Test Sequence"]
+        worksheet = writer.sheets["Sequence"]
 
         header_format = workbook.add_format({
 
             "bold": True,
             "text_wrap": True,
-            "valign": "middle",
             "align": "center",
+            "valign": "middle",
             "fg_color": "#0070C0",
             "font_color": "white",
             "border": 1
@@ -53,19 +58,19 @@ def format_excel(df):
 
         })
 
+        # rewrite headers
         for col_num, column in enumerate(df.columns):
             worksheet.write(0, col_num, column, header_format)
 
+        # adjust column width
         for i, col in enumerate(df.columns):
 
-            max_len = max(
-
+            width = max(
                 df[col].astype(str).map(len).max(),
                 len(col)
-
             ) + 3
 
-            worksheet.set_column(i, i, max_len, cell_format)
+            worksheet.set_column(i, i, width, cell_format)
 
         worksheet.freeze_panes(1, 0)
 
@@ -88,13 +93,40 @@ if operation == "📤 Machine CSV → Technician Excel":
 
         edited = st.data_editor(df, use_container_width=True)
 
-        excel_file = format_excel(edited)
+        excel = format_excel(edited)
 
         st.download_button(
 
             "Download Technician Excel",
-            excel_file,
+            excel,
             "technician_sequence.xlsx"
+
+        )
+
+
+# --------------------------------------------------
+# TECHNICIAN EXCEL → MACHINE CSV
+# --------------------------------------------------
+
+elif operation == "🔄 Technician Excel → Machine CSV":
+
+    uploaded = st.file_uploader("Upload Technician Excel", type=["xlsx"])
+
+    if uploaded:
+
+        df = pd.read_excel(uploaded)
+
+        edited = st.data_editor(df, use_container_width=True)
+
+        machine_df = edited.drop(columns=["Notes"], errors="ignore")
+
+        csv = machine_df.to_csv(index=False, sep=";")
+
+        st.download_button(
+
+            "Download Machine CSV",
+            csv,
+            "machine_sequence.csv"
 
         )
 
@@ -125,12 +157,12 @@ elif operation == "📄 Spec → Technician Excel":
 
         edited = st.data_editor(spec_df, use_container_width=True)
 
-        excel_file = format_excel(edited)
+        excel = format_excel(edited)
 
         st.download_button(
 
             "Download Technician Excel",
-            excel_file,
+            excel,
             "technician_sequence.xlsx"
 
         )
