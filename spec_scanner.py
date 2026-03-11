@@ -29,7 +29,7 @@ def scan_spec(file):
     rows = []
 
     # --------------------------------------------------
-    # Scan ALL sheets (each sheet = a test)
+    # Scan all sheets (each sheet = one test)
     # --------------------------------------------------
 
     for sheet_name, df in sheets.items():
@@ -41,7 +41,7 @@ def scan_spec(file):
             value = str(r[0]).strip()
             text = value.lower()
 
-            # Detect primary / secondary mode
+            # Detect mode
             if "primary" in text:
                 mode = 1
                 continue
@@ -73,10 +73,17 @@ def scan_spec(file):
 
             remarks = str(r[8]) if len(r) > 8 else ""
 
+            # --------------------------------------------------
+            # Skip rows without valid secondary pressure
+            # --------------------------------------------------
+
             if pd.isna(secondary):
                 continue
 
-            secondary = float(secondary)
+            try:
+                secondary = float(secondary)
+            except:
+                continue
 
             # --------------------------------------------------
             # Primary pressure rule
@@ -130,7 +137,7 @@ def scan_spec(file):
                 bp_nde = 0
 
             # --------------------------------------------------
-            # Acceptance point
+            # Acceptance detection
             # --------------------------------------------------
 
             ap = 1 if "acceptance" in remarks.lower() else 0
