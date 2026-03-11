@@ -37,7 +37,6 @@ def scan_spec(file):
 
         name_lower = sheet_name.lower()
 
-        # determine test mode
         test_mode = 1
         if "secondary" in name_lower:
             test_mode = 2
@@ -51,10 +50,6 @@ def scan_spec(file):
                 if cell != "test step":
                     continue
 
-                # ------------------------------------------------
-                # Validate this is a REAL test table
-                # ------------------------------------------------
-
                 col_primary = str(df.iloc[i, j+1]).lower() if j+1 < len(df.columns) else ""
                 col_secondary = str(df.iloc[i, j+2]).lower() if j+2 < len(df.columns) else ""
 
@@ -65,10 +60,6 @@ def scan_spec(file):
                     continue
 
                 step_col = j
-
-                # ------------------------------------------------
-                # Read table rows
-                # ------------------------------------------------
 
                 for k in range(i + 1, len(df)):
 
@@ -108,7 +99,7 @@ def scan_spec(file):
                     if primary is None and secondary is not None:
                         primary = secondary + 5
 
-                    # Temperature rule
+                    # Temperature
                     if isinstance(temp, str) and temp.upper() == "AMB":
                         temp = 60
 
@@ -117,9 +108,13 @@ def scan_spec(file):
                     if hold is not None:
                         duration = int(hold * 60)
 
-                    # Acceptance rule
-                    notes = remarks if remarks not in [None, "", "NA"] else None
-                    acceptance = 1 if notes else 0
+                    # Correct acceptance logic
+                    if remarks is None or pd.isna(remarks) or str(remarks).strip() == "":
+                        notes = None
+                        acceptance = 0
+                    else:
+                        notes = str(remarks).strip()
+                        acceptance = 1
 
                     # Pressure routing
                     interspace = None
