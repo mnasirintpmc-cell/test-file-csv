@@ -3,7 +3,7 @@ import pandas as pd
 try:
     import pyxlsb
 except ImportError:
-    raise ImportError("Install pyxlsb with: pip install pyxlsb")
+    raise ImportError("Install pyxlsb: pip install pyxlsb")
 
 
 def safe_get(row, idx):
@@ -61,7 +61,7 @@ def scan_spec(file):
 
                 step_col = j
 
-                for k in range(i + 1, len(df)):
+                for k in range(i+1, len(df)):
 
                     row = df.iloc[k].tolist()
 
@@ -74,18 +74,17 @@ def scan_spec(file):
                         break
 
                     try:
-                        spec_step = int(float(step_val))
+                        step = int(float(step_val))
                     except:
                         continue
 
-                    primary_cell = safe_get(row, step_col + 1)
-                    secondary = to_float(safe_get(row, step_col + 2))
-                    speed = to_float(safe_get(row, step_col + 3))
-                    temp = safe_get(row, step_col + 4)
-                    hold = to_float(safe_get(row, step_col + 5))
-                    remarks = safe_get(row, step_col + 8)
+                    primary_cell = safe_get(row, step_col+1)
+                    secondary = to_float(safe_get(row, step_col+2))
+                    speed = to_float(safe_get(row, step_col+3))
+                    temp = safe_get(row, step_col+4)
+                    hold = to_float(safe_get(row, step_col+5))
+                    remarks = safe_get(row, step_col+8)
 
-                    # Primary pressure rule
                     primary = None
 
                     if isinstance(primary_cell, str) and "secondary" in primary_cell.lower():
@@ -102,13 +101,9 @@ def scan_spec(file):
 
                     duration = None
                     if hold is not None:
-                        duration = int(hold * 60)
+                        duration = int(hold*60)
 
-                    # Acceptance rule tied to remarks
-                    if isinstance(remarks, str) and remarks.strip() != "":
-                        acceptance = 1
-                    else:
-                        acceptance = 0
+                    acceptance = 1 if isinstance(remarks, str) else 0
 
                     interspace = None
                     bp_de = None
@@ -117,38 +112,28 @@ def scan_spec(file):
                     if test_mode == 1:
                         bp_de = secondary
                         bp_nde = secondary
-
-                    if test_mode == 2:
+                    else:
                         interspace = secondary
 
                     rows.append({
 
-                        "Step": spec_step,
+                        "Step": step,
                         "Test_Name": sheet_name,
-
                         "Speed_RPM": speed,
                         "Primary seal Gas Pressure (barg)": primary,
-
                         "Interspace_Pressure_bar": interspace,
                         "BackPressure_Drive_End_bar": bp_de,
                         "BackPressure_Non_Drive_End_bar": bp_nde,
-
                         "Gas_Injection_bar": None,
-
                         "Duration_s": duration,
                         "Temperature_C": temp,
-
                         "Test_Mode": test_mode,
                         "Acceptance point": acceptance,
                         "Measurement": 1,
                         "Torque_Check": None,
                         "Gas_Type": "Air",
-
                         "Notes": remarks
                     })
-
-    if not rows:
-        raise ValueError("No valid test tables detected")
 
     df = pd.DataFrame(rows)
 
