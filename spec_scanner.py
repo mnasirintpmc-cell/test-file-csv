@@ -37,38 +37,40 @@ def scan_spec(file):
 
         name_lower = sheet_name.lower()
 
+        # determine test mode
         test_mode = 1
         if "secondary" in name_lower:
             test_mode = 2
 
         for i in range(len(df)):
 
-            row_text = " ".join([str(x).lower() for x in df.iloc[i].tolist()])
+            for j in range(len(df.columns)):
 
-            # ------------------------------------------------
-            # Detect REAL test table header
-            # ------------------------------------------------
-            if (
-                "test step" in row_text and
-                "primary seal gas pressure" in row_text and
-                "secondary seal gas pressure" in row_text
-            ):
+                cell = str(df.iloc[i, j]).strip().lower()
 
-                header_row = i
-
-                # locate Test Step column
-                step_col = None
-
-                for j, cell in enumerate(df.iloc[i]):
-
-                    if str(cell).strip().lower() == "test step":
-                        step_col = j
-                        break
-
-                if step_col is None:
+                if cell != "test step":
                     continue
 
-                for k in range(header_row + 1, len(df)):
+                # ------------------------------------------------
+                # Validate this is a REAL test table
+                # ------------------------------------------------
+
+                col_primary = str(df.iloc[i, j+1]).lower() if j+1 < len(df.columns) else ""
+                col_secondary = str(df.iloc[i, j+2]).lower() if j+2 < len(df.columns) else ""
+
+                if (
+                    "primary seal gas pressure" not in col_primary
+                    or "secondary seal gas pressure" not in col_secondary
+                ):
+                    continue
+
+                step_col = j
+
+                # ------------------------------------------------
+                # Read table rows
+                # ------------------------------------------------
+
+                for k in range(i + 1, len(df)):
 
                     row = df.iloc[k].tolist()
 
@@ -94,10 +96,7 @@ def scan_spec(file):
                     hold = to_float(safe_get(row, step_col + 5))
                     remarks = safe_get(row, step_col + 8)
 
-                    # ------------------------------------------
                     # Primary pressure rule
-                    # ------------------------------------------
-
                     primary = None
 
                     if isinstance(primary_cell, str) and "secondary" in primary_cell.lower():
@@ -109,32 +108,20 @@ def scan_spec(file):
                     if primary is None and secondary is not None:
                         primary = secondary + 5
 
-                    # ------------------------------------------
-                    # Temperature
-                    # ------------------------------------------
-
+                    # Temperature rule
                     if isinstance(temp, str) and temp.upper() == "AMB":
                         temp = 60
 
-                    # ------------------------------------------
                     # Duration
-                    # ------------------------------------------
-
                     duration = None
                     if hold is not None:
                         duration = int(hold * 60)
 
-                    # ------------------------------------------
                     # Acceptance rule
-                    # ------------------------------------------
-
                     notes = remarks if remarks not in [None, "", "NA"] else None
                     acceptance = 1 if notes else 0
 
-                    # ------------------------------------------
                     # Pressure routing
-                    # ------------------------------------------
-
                     interspace = None
                     bp_de = None
                     bp_nde = None
@@ -173,7 +160,7 @@ def scan_spec(file):
                     })
 
     if not rows:
-        raise ValueError("No test tables detected in the file")
+        raise ValueError("No valid test tables detected in the file")
 
     df = pd.DataFrame(rows)
 
