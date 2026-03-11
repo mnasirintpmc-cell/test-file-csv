@@ -35,103 +35,142 @@ def scan_spec(file):
         if df is None or df.empty:
             continue
 
+        name_lower = sheet_name.lower()
+
         test_mode = 1
-        if "secondary" in sheet_name.lower():
+        if "secondary" in name_lower:
             test_mode = 2
 
         for i in range(len(df)):
 
-            for j in range(len(df.columns)):
+            row_text = " ".join([str(x).lower() for x in df.iloc[i].tolist()])
 
-                cell = str(df.iloc[i, j]).strip().lower()
+            # ------------------------------------------------
+            # Detect REAL test table header
+            # ------------------------------------------------
+            if (
+                "test step" in row_text and
+                "primary seal gas pressure" in row_text and
+                "secondary seal gas pressure" in row_text
+            ):
 
-                if cell == "test step":
+                header_row = i
 
-                    step_col = j
+                # locate Test Step column
+                step_col = None
 
-                    for k in range(i + 1, len(df)):
+                for j, cell in enumerate(df.iloc[i]):
 
-                        row = df.iloc[k].tolist()
+                    if str(cell).strip().lower() == "test step":
+                        step_col = j
+                        break
 
-                        step_val = safe_get(row, step_col)
+                if step_col is None:
+                    continue
 
-                        if step_val is None:
-                            continue
+                for k in range(header_row + 1, len(df)):
 
-                        text = str(step_val).lower()
+                    row = df.iloc[k].tolist()
 
-                        if "end of" in text:
-                            break
+                    step_val = safe_get(row, step_col)
 
-                        try:
-                            spec_step = int(float(step_val))
-                        except:
-                            continue
+                    if step_val is None:
+                        continue
 
-                        primary_cell = safe_get(row, step_col + 1)
-                        secondary = to_float(safe_get(row, step_col + 2))
-                        speed = to_float(safe_get(row, step_col + 3))
-                        temp = safe_get(row, step_col + 4)
-                        hold = to_float(safe_get(row, step_col + 5))
-                        remarks = safe_get(row, step_col + 8)
+                    text = str(step_val).lower()
 
-                        primary = None
+                    if "end of" in text:
+                        break
 
-                        if isinstance(primary_cell, str) and "secondary" in primary_cell.lower():
-                            if secondary is not None:
-                                primary = secondary + 5
-                        else:
-                            primary = to_float(primary_cell)
+                    try:
+                        spec_step = int(float(step_val))
+                    except:
+                        continue
 
-                        if primary is None and secondary is not None:
+                    primary_cell = safe_get(row, step_col + 1)
+                    secondary = to_float(safe_get(row, step_col + 2))
+                    speed = to_float(safe_get(row, step_col + 3))
+                    temp = safe_get(row, step_col + 4)
+                    hold = to_float(safe_get(row, step_col + 5))
+                    remarks = safe_get(row, step_col + 8)
+
+                    # ------------------------------------------
+                    # Primary pressure rule
+                    # ------------------------------------------
+
+                    primary = None
+
+                    if isinstance(primary_cell, str) and "secondary" in primary_cell.lower():
+                        if secondary is not None:
                             primary = secondary + 5
+                    else:
+                        primary = to_float(primary_cell)
 
-                        if isinstance(temp, str) and temp.upper() == "AMB":
-                            temp = 60
+                    if primary is None and secondary is not None:
+                        primary = secondary + 5
 
-                        duration = None
-                        if hold is not None:
-                            duration = int(hold * 60)
+                    # ------------------------------------------
+                    # Temperature
+                    # ------------------------------------------
 
-                        notes = remarks if remarks not in [None, "", "NA"] else None
-                        acceptance = 1 if notes else 0
+                    if isinstance(temp, str) and temp.upper() == "AMB":
+                        temp = 60
 
-                        interspace = None
-                        bp_de = None
-                        bp_nde = None
+                    # ------------------------------------------
+                    # Duration
+                    # ------------------------------------------
 
-                        if test_mode == 1:
-                            bp_de = secondary
-                            bp_nde = secondary
+                    duration = None
+                    if hold is not None:
+                        duration = int(hold * 60)
 
-                        if test_mode == 2:
-                            interspace = secondary
+                    # ------------------------------------------
+                    # Acceptance rule
+                    # ------------------------------------------
 
-                        rows.append({
+                    notes = remarks if remarks not in [None, "", "NA"] else None
+                    acceptance = 1 if notes else 0
 
-                            "Spec_Step": spec_step,
-                            "Test_Name": sheet_name,
+                    # ------------------------------------------
+                    # Pressure routing
+                    # ------------------------------------------
 
-                            "Speed_RPM": speed,
-                            "Primary seal Gas Pressure (barg)": primary,
+                    interspace = None
+                    bp_de = None
+                    bp_nde = None
 
-                            "Interspace_Pressure_bar": interspace,
-                            "BackPressure_Drive_End_bar": bp_de,
-                            "BackPressure_Non_Drive_End_bar": bp_nde,
+                    if test_mode == 1:
+                        bp_de = secondary
+                        bp_nde = secondary
 
-                            "Gas_Injection_bar": None,
+                    if test_mode == 2:
+                        interspace = secondary
 
-                            "Duration_s": duration,
-                            "Temperature_C": temp,
+                    rows.append({
 
-                            "Test_Mode": test_mode,
-                            "Acceptance point": acceptance,
-                            "Measurement": 1,
-                            "Torque_Check": None,
-                            "Gas_Type": "Air",
+                        "Spec_Step": spec_step,
+                        "Test_Name": sheet_name,
 
-                            "Notes": notes
-                        })
+                        "Speed_RPM": speed,
+                        "Primary seal Gas Pressure (barg)": primary,
+
+                        "Interspace_Pressure_bar": interspace,
+                        "BackPressure_Drive_End_bar": bp_de,
+                        "BackPressure_Non_Drive_End_bar": bp_nde,
+
+                        "Gas_Injection_bar": None,
+
+                        "Duration_s": duration,
+                        "Temperature_C": temp,
+
+                        "Test_Mode": test_mode,
+                        "Acceptance point": acceptance,
+                        "Measurement": 1,
+                        "Torque_Check": None,
+                        "Gas_Type": "Air",
+
+                        "Notes": notes
+                    })
 
     if not rows:
         raise ValueError("No test tables detected in the file")
@@ -140,7 +179,6 @@ def scan_spec(file):
 
     df = df.sort_values(["Test_Name", "Spec_Step"])
 
-    # Correct step numbering
     df["Step"] = df["Spec_Step"]
 
     df = df.drop(columns=["Spec_Step"])
