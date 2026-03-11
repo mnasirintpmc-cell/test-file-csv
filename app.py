@@ -3,11 +3,11 @@ import pandas as pd
 import io
 
 from spec_scanner import scan_spec
-from validator import validate_sequence
 
 st.set_page_config(layout="wide")
 
 st.title("⚙️ Seal Test Manager")
+
 
 operation = st.sidebar.radio(
 
@@ -18,7 +18,6 @@ operation = st.sidebar.radio(
         "🔄 Technician Excel → Machine CSV",
         "📄 Spec → Technician Excel"
     ]
-
 )
 
 
@@ -33,7 +32,7 @@ def format_excel(df):
         workbook = writer.book
         worksheet = writer.sheets["Sheet1"]
 
-        header_format = workbook.add_format({
+        header = workbook.add_format({
 
             "bold": True,
             "align": "center",
@@ -45,7 +44,7 @@ def format_excel(df):
         })
 
         for col_num, value in enumerate(df.columns):
-            worksheet.write(0, col_num, value, header_format)
+            worksheet.write(0, col_num, value, header)
 
         for i, col in enumerate(df.columns):
 
@@ -61,6 +60,39 @@ def format_excel(df):
     return output.getvalue()
 
 
+def validate_sequence(df):
+
+    warnings = []
+
+    for _, row in df.iterrows():
+
+        step = row.get("Step")
+
+        try:
+            primary = float(row["Primary seal Gas Pressure (barg)"])
+        except:
+            continue
+
+        try:
+            inter = float(row["Interspace_Pressure_bar"])
+        except:
+            inter = 0
+
+        if primary < inter:
+
+            warnings.append(
+                f"Step {step}: Primary pressure lower than interspace"
+            )
+
+        if inter > 0 and primary - inter < 0.2:
+
+            warnings.append(
+                f"Step {step}: ΔP < 0.2 bar"
+            )
+
+    return warnings
+
+
 # --------------------------------------------------
 # CSV → TECHNICIAN
 # --------------------------------------------------
@@ -73,9 +105,16 @@ if operation == "📤 Machine CSV → Technician Excel":
 
         df = pd.read_csv(uploaded, delimiter=";")
 
-        df.insert(0, "Step", range(1, len(df)+1))
+        if "edited_df" not in st.session_state:
+            st.session_state.edited_df = df
 
-        edited = st.data_editor(df, use_container_width=True)
+        edited = st.data_editor(
+            st.session_state.edited_df,
+            use_container_width=True,
+            num_rows="dynamic"
+        )
+
+        st.session_state.edited_df = edited
 
         excel = format_excel(edited)
 
@@ -98,7 +137,16 @@ elif operation == "🔄 Technician Excel → Machine CSV":
 
         df = pd.read_excel(uploaded)
 
-        edited = st.data_editor(df, use_container_width=True)
+        if "edited_df" not in st.session_state:
+            st.session_state.edited_df = df
+
+        edited = st.data_editor(
+            st.session_state.edited_df,
+            use_container_width=True,
+            num_rows="dynamic"
+        )
+
+        st.session_state.edited_df = edited
 
         warnings = validate_sequence(edited)
 
@@ -132,7 +180,16 @@ elif operation == "📄 Spec → Technician Excel":
             st.error(f"Spec read error: {e}")
             st.stop()
 
-        edited = st.data_editor(spec_df, use_container_width=True)
+        if "edited_df" not in st.session_state:
+            st.session_state.edited_df = spec_df
+
+        edited = st.data_editor(
+            st.session_state.edited_df,
+            use_container_width=True,
+            num_rows="dynamic"
+        )
+
+        st.session_state.edited_df = edited
 
         warnings = validate_sequence(edited)
 
