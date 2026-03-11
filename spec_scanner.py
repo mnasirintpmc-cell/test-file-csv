@@ -3,9 +3,7 @@ import pandas as pd
 try:
     import pyxlsb
 except ImportError:
-    raise ImportError(
-        "Missing dependency 'pyxlsb'. Install with: pip install pyxlsb"
-    )
+    raise ImportError("Install pyxlsb: pip install pyxlsb")
 
 
 def scan_spec(file):
@@ -21,120 +19,100 @@ def scan_spec(file):
 
     for sheet_name, df in sheets.items():
 
-        name = sheet_name.lower()
-
-        # Only process sheets that are actual tests
-        if not any(x in name for x in [
-            "test",
-            "mrt",
-            "pressure",
-            "static"
-        ]):
-            continue
-
-        header_row = None
-        step_col = None
-
-        # --------------------------------------------------
-        # Locate header row containing "Test Step"
-        # --------------------------------------------------
-
         for i in range(len(df)):
+
+            # --------------------------------------------------
+            # Detect table header
+            # --------------------------------------------------
             for j in range(len(df.columns)):
 
                 cell = str(df.iloc[i, j]).strip().lower()
 
-                if "test step" in cell:
+                if cell == "test step":
 
-                    header_row = i
                     step_col = j
-                    break
+                    header_row = i
 
-            if header_row is not None:
-                break
+                    # ------------------------------------------
+                    # Read table rows
+                    # ------------------------------------------
+                    for k in range(header_row + 1, len(df)):
 
-        if header_row is None:
-            continue
+                        step_val = df.iloc[k, step_col]
 
-        # --------------------------------------------------
-        # Read rows under the header
-        # --------------------------------------------------
+                        if pd.isna(step_val):
+                            continue
 
-        for i in range(header_row + 1, len(df)):
+                        if "end of" in str(step_val).lower():
+                            break
 
-            step_value = df.iloc[i, step_col]
+                        try:
+                            spec_step = int(float(step_val))
+                        except:
+                            continue
 
-            if pd.isna(step_value):
-                break
+                        primary = df.iloc[k, step_col + 1]
+                        secondary = df.iloc[k, step_col + 2]
+                        speed = df.iloc[k, step_col + 3]
+                        temp = df.iloc[k, step_col + 4]
+                        hold = df.iloc[k, step_col + 5]
+                        remarks = df.iloc[k, step_col + 8]
 
-            if "end of" in str(step_value).lower():
-                break
+                        try:
+                            secondary = float(secondary)
+                        except:
+                            continue
 
-            try:
-                spec_step = int(float(step_value))
-            except:
-                continue
+                        try:
+                            primary = float(primary)
+                        except:
+                            primary = secondary + 5
 
-            primary = df.iloc[i, step_col + 1] if step_col + 1 < len(df.columns) else None
-            secondary = df.iloc[i, step_col + 2] if step_col + 2 < len(df.columns) else None
-            speed = df.iloc[i, step_col + 3] if step_col + 3 < len(df.columns) else 0
-            temp = df.iloc[i, step_col + 4] if step_col + 4 < len(df.columns) else 60
-            hold = df.iloc[i, step_col + 5] if step_col + 5 < len(df.columns) else 0
-            remarks = df.iloc[i, step_col + 8] if step_col + 8 < len(df.columns) else ""
+                        try:
+                            speed = float(speed)
+                        except:
+                            speed = 0
 
-            try:
-                secondary = float(secondary)
-            except:
-                continue
+                        if str(temp).upper() == "AMB":
+                            temp = 60
 
-            try:
-                primary = float(primary)
-            except:
-                primary = secondary + 5
+                        hold = 0 if pd.isna(hold) else hold
+                        duration = int(hold * 60)
 
-            try:
-                speed = float(speed)
-            except:
-                speed = 0
+                        rows.append({
 
-            if str(temp).upper() == "AMB":
-                temp = 60
+                            "Step": None,  # assigned later
+                            "Test_Name": sheet_name,
+                            "Spec_Step": spec_step,
 
-            hold = 0 if pd.isna(hold) else hold
-            duration = int(hold * 60)
+                            "Speed_RPM": speed,
+                            "Primary seal Gas Pressure (barg)": primary,
+                            "Interspace_Pressure_bar": 0,
+                            "BackPressure_Drive_End_bar": secondary,
+                            "BackPressure_Non_Drive_End_bar": secondary,
+                            "Gas_Injection_bar": 0,
 
-            rows.append({
+                            "Temperature_C": temp,
+                            "Duration_s": duration,
 
-                "spec_step": spec_step,
-                "Speed_RPM": speed,
-                "Primary seal Gas Pressure (barg)": primary,
-                "Interspace_Pressure_bar": 0,
-                "BackPressure_Drive_End_bar": secondary,
-                "BackPressure_Non_Drive_End_bar": secondary,
-                "Gas_Injection_bar": 0,
-                "Duration_s": duration,
-                "Acceptance point": 1 if "acceptance" in str(remarks).lower() else 0,
-                "Temperature_C": temp,
-                "Gas_Type": "Air",
-                "Test_Mode": 1,
-                "Measurement": 1,
-                "Torque_Check": 0,
-                "Notes": remarks,
-                "Test_Name": sheet_name
+                            "Acceptance point": 0,
+                            "Measurement": 1,
+                            "Torque_Check": 0,
 
-            })
+                            "Gas_Type": "Air",
+                            "Notes": remarks
+
+                        })
 
     if not rows:
-        raise ValueError(
-            "No test procedure tables detected in the test sheets"
-        )
+        raise ValueError("No test steps found in any sheet")
 
     df = pd.DataFrame(rows)
 
-    df = df.sort_values("spec_step")
+    df = df.sort_values(["Test_Name", "Spec_Step"])
 
     df.insert(0, "Step", range(1, len(df) + 1))
 
-    df = df.drop(columns=["spec_step"])
+    df = df.drop(columns=["Spec_Step"])
 
     return df
