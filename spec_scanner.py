@@ -70,9 +70,7 @@ def scan_spec(file):
                     if step_val is None:
                         continue
 
-                    text = str(step_val).lower()
-
-                    if "end of" in text:
+                    if "end of" in str(step_val).lower():
                         break
 
                     try:
@@ -99,19 +97,19 @@ def scan_spec(file):
                     if primary is None and secondary is not None:
                         primary = secondary + 5
 
-                    # Temperature rule
                     if isinstance(temp, str) and temp.upper() == "AMB":
                         temp = 60
 
-                    # Duration
                     duration = None
                     if hold is not None:
                         duration = int(hold * 60)
 
-                    # Notes handling
-                    notes = remarks
+                    # Acceptance rule tied to remarks
+                    if isinstance(remarks, str) and remarks.strip() != "":
+                        acceptance = 1
+                    else:
+                        acceptance = 0
 
-                    # Pressure routing
                     interspace = None
                     bp_de = None
                     bp_nde = None
@@ -125,7 +123,7 @@ def scan_spec(file):
 
                     rows.append({
 
-                        "Spec_Step": spec_step,
+                        "Step": spec_step,
                         "Test_Name": sheet_name,
 
                         "Speed_RPM": speed,
@@ -141,28 +139,19 @@ def scan_spec(file):
                         "Temperature_C": temp,
 
                         "Test_Mode": test_mode,
-                        "Notes": notes
+                        "Acceptance point": acceptance,
+                        "Measurement": 1,
+                        "Torque_Check": None,
+                        "Gas_Type": "Air",
+
+                        "Notes": remarks
                     })
 
     if not rows:
-        raise ValueError("No valid test tables detected in the file")
+        raise ValueError("No valid test tables detected")
 
     df = pd.DataFrame(rows)
 
-    df = df.sort_values(["Test_Name", "Spec_Step"])
-
-    df["Step"] = df["Spec_Step"]
-
-    df = df.drop(columns=["Spec_Step"])
-
-    # Convert missing values to NA
     df = df.fillna("NA")
-
-    # Acceptance rule
-    df["Acceptance point"] = df["Notes"].apply(
-        lambda x: 0 if str(x).strip().upper() == "NA" else 1
-    )
-
-    df = df[["Step"] + [c for c in df.columns if c != "Step"]]
 
     return df
