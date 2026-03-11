@@ -50,6 +50,7 @@ def scan_spec(file):
                 if cell != "test step":
                     continue
 
+                # validate real test table header
                 col_primary = str(df.iloc[i, j+1]).lower() if j+1 < len(df.columns) else ""
                 col_secondary = str(df.iloc[i, j+2]).lower() if j+2 < len(df.columns) else ""
 
@@ -85,6 +86,7 @@ def scan_spec(file):
                     hold = to_float(safe_get(row, step_col+5))
                     remarks = safe_get(row, step_col+8)
 
+                    # primary rule
                     primary = None
 
                     if isinstance(primary_cell, str) and "secondary" in primary_cell.lower():
@@ -101,7 +103,7 @@ def scan_spec(file):
 
                     duration = None
                     if hold is not None:
-                        duration = int(hold*60)
+                        duration = int(hold * 60)
 
                     acceptance = 1 if isinstance(remarks, str) else 0
 
