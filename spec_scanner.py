@@ -1,6 +1,10 @@
 import pandas as pd
 import re
 
+# --------------------------------------------------
+# Ensure pyxlsb is installed
+# --------------------------------------------------
+
 try:
     import pyxlsb
 except ImportError:
@@ -8,6 +12,10 @@ except ImportError:
         "Missing dependency 'pyxlsb'. Install with: pip install pyxlsb"
     )
 
+
+# --------------------------------------------------
+# SPEC SCANNER
+# --------------------------------------------------
 
 def scan_spec(file):
 
@@ -21,7 +29,7 @@ def scan_spec(file):
     rows = []
 
     # --------------------------------------------------
-    # Process ALL sheets
+    # Scan ALL sheets (each sheet = a test)
     # --------------------------------------------------
 
     for sheet_name, df in sheets.items():
@@ -33,7 +41,7 @@ def scan_spec(file):
             value = str(r[0]).strip()
             text = value.lower()
 
-            # Detect test mode
+            # Detect primary / secondary mode
             if "primary" in text:
                 mode = 1
                 continue
@@ -42,7 +50,10 @@ def scan_spec(file):
                 mode = 2
                 continue
 
+            # --------------------------------------------------
             # Detect step number
+            # --------------------------------------------------
+
             match = re.search(r"\d+", value)
 
             if not match:
@@ -50,22 +61,27 @@ def scan_spec(file):
 
             spec_step = int(match.group())
 
-            primary_spec = r[1]
-            secondary = r[2]
-            speed = r[3]
-            temp = r[4]
-            hold = r[5]
+            # --------------------------------------------------
+            # Safe column reading
+            # --------------------------------------------------
 
-            remarks = ""
-            if len(r) > 8:
-                remarks = str(r[8])
+            primary_spec = r[1] if len(r) > 1 else None
+            secondary = r[2] if len(r) > 2 else None
+            speed = r[3] if len(r) > 3 else 0
+            temp = r[4] if len(r) > 4 else 60
+            hold = r[5] if len(r) > 5 else 0
+
+            remarks = str(r[8]) if len(r) > 8 else ""
 
             if pd.isna(secondary):
                 continue
 
             secondary = float(secondary)
 
+            # --------------------------------------------------
             # Primary pressure rule
+            # --------------------------------------------------
+
             if "secondary seal gas pressure" in str(primary_spec).lower():
                 primary = secondary + 5
             else:
@@ -74,16 +90,32 @@ def scan_spec(file):
                 except:
                     primary = secondary + 5
 
+            # --------------------------------------------------
+            # Temperature handling
+            # --------------------------------------------------
+
             if str(temp).upper() == "AMB":
                 temp = 60
+
+            # --------------------------------------------------
+            # Speed safety
+            # --------------------------------------------------
 
             try:
                 speed = float(speed)
             except:
                 speed = 0
 
+            # --------------------------------------------------
+            # Duration
+            # --------------------------------------------------
+
             hold = 0 if pd.isna(hold) else hold
             duration = int(hold * 60)
+
+            # --------------------------------------------------
+            # Pressure routing
+            # --------------------------------------------------
 
             if mode == 1:
 
@@ -97,7 +129,15 @@ def scan_spec(file):
                 bp_de = 0
                 bp_nde = 0
 
+            # --------------------------------------------------
+            # Acceptance point
+            # --------------------------------------------------
+
             ap = 1 if "acceptance" in remarks.lower() else 0
+
+            # --------------------------------------------------
+            # Append row
+            # --------------------------------------------------
 
             rows.append({
 
@@ -119,6 +159,10 @@ def scan_spec(file):
                 "Test_Name": sheet_name
 
             })
+
+    # --------------------------------------------------
+    # Check results
+    # --------------------------------------------------
 
     if not rows:
         raise ValueError(
