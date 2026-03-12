@@ -1,5 +1,6 @@
 import pandas as pd
 import os
+import io
 
 try:
     import pyxlsb
@@ -29,12 +30,16 @@ def _detect_engine(file):
 
     name = None
 
-    if hasattr(file, "name"):
-        name = file.name
-    elif isinstance(file, str):
+    # case 1 — filepath
+    if isinstance(file, str):
         name = file
 
+    # case 2 — Streamlit UploadedFile
+    elif hasattr(file, "name"):
+        name = file.name
+
     if name:
+
         ext = os.path.splitext(name)[1].lower()
 
         if ext == ".xlsb":
@@ -43,15 +48,28 @@ def _detect_engine(file):
         if ext in [".xlsx", ".xlsm"]:
             return "openpyxl"
 
+    # fallback (safe default)
     return "openpyxl"
+
+
+def _prepare_file(file):
+
+    # Streamlit UploadedFile → BytesIO
+    if hasattr(file, "read"):
+        data = file.read()
+        return io.BytesIO(data)
+
+    return file
 
 
 def scan_spec(file):
 
     engine = _detect_engine(file)
 
+    file_buffer = _prepare_file(file)
+
     sheets = pd.read_excel(
-        file,
+        file_buffer,
         engine=engine,
         sheet_name=None,
         header=None
