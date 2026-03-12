@@ -6,6 +6,7 @@ import numpy as np
 import math
 import os
 
+
 # =====================================================
 # SAFE CSV READER
 # =====================================================
@@ -64,7 +65,7 @@ def detect_file_type(df):
 
 
 # =====================================================
-# COLUMN MAPPINGS
+# COLUMN MAPPING
 # =====================================================
 
 def get_column_mapping(file_type):
@@ -155,10 +156,47 @@ def get_column_mapping(file_type):
 
 
 # =====================================================
+# SAFETY VALIDATION
+# =====================================================
+
+def validate_safety(df):
+
+    warnings = []
+
+    if 'Primary seal Gas Pressure (barg)' not in df.columns:
+        return warnings
+
+    for i,row in df.iterrows():
+
+        step = row.get("Step",i+1)
+
+        try:
+            primary = float(row.get('Primary seal Gas Pressure (barg)',0))
+        except:
+            primary = 0
+
+        try:
+            inter = float(row.get('Interspace_Pressure_bar',0))
+        except:
+            inter = 0
+
+        if inter > primary:
+            warnings.append(f"Step {step}: Interspace pressure > Cell pressure")
+
+        if primary - inter < 0.2 and inter > 0:
+            warnings.append(f"Step {step}: Differential pressure < 0.2 bar")
+
+        if primary < 0 or inter < 0:
+            warnings.append(f"Step {step}: Negative pressure detected")
+
+    return warnings
+
+
+# =====================================================
 # CONVERSIONS
 # =====================================================
 
-def convert_machine_to_technician(df, file_type):
+def convert_machine_to_technician(df,file_type):
 
     mapping = get_column_mapping(file_type)
 
@@ -188,7 +226,7 @@ def convert_to_machine_codes(df):
 
 
 # =====================================================
-# EDITABLE DATAFRAME
+# EDITABLE TABLE
 # =====================================================
 
 def editable_dataframe(df,key,height=500):
@@ -196,70 +234,25 @@ def editable_dataframe(df,key,height=500):
     if key not in st.session_state:
         st.session_state[key] = df.copy()
 
-    with st.form(f"form_{key}"):
+    edited = st.data_editor(
+        st.session_state[key],
+        use_container_width=True,
+        height=height,
+        num_rows="fixed"
+    )
 
-        edited = st.data_editor(
-            st.session_state[key],
-            use_container_width=True,
-            height=height,
-            num_rows="fixed"
-        )
+    st.session_state[key] = edited
 
-        submitted = st.form_submit_button("Apply changes")
+    warnings = validate_safety(edited)
 
-    if submitted:
-        st.session_state[key] = edited
-        st.success("Changes applied")
+    if warnings:
+        st.error("⚠ Safety interlock violations detected")
+        for w in warnings:
+            st.warning(w)
 
-    return st.session_state[key]
+    return edited
 
-# =====================================================
-# SAFETY VALIDATION
-# =====================================================
 
-def validate_safety(df):
-
-    warnings = []
-
-    if 'Primary seal Gas Pressure (barg)' not in df.columns:
-        return warnings
-
-    for i, row in df.iterrows():
-
-        step = row.get("Step", i+1)
-
-        try:
-            primary = float(row.get('Primary seal Gas Pressure (barg)',0))
-        except:
-            primary = 0
-
-        try:
-            inter = float(row.get('Interspace_Pressure_bar',0))
-        except:
-            inter = 0
-
-        # Rule 1
-        if inter > primary:
-
-            warnings.append(
-                f"Step {step}: Interspace pressure greater than cell pressure"
-            )
-
-        # Rule 2
-        if primary - inter < 0.2 and inter > 0:
-
-            warnings.append(
-                f"Step {step}: Differential pressure < 0.2 bar"
-            )
-
-        # Rule 3
-        if primary < 0 or inter < 0:
-
-            warnings.append(
-                f"Step {step}: Negative pressure detected"
-            )
-
-    return warnings
 # =====================================================
 # MAIN APP
 # =====================================================
@@ -284,7 +277,7 @@ def main():
 
 
 # -----------------------------------------------------
-# CSV → TECHNICIAN
+# MACHINE CSV → EXCEL
 # -----------------------------------------------------
 
     if operation == "Machine CSV to Excel":
@@ -302,11 +295,15 @@ def main():
                 "csv_editor"
             )
 
-            st.dataframe(edited)
+            st.download_button(
+                "Download Excel",
+                edited.to_excel(index=False),
+                file_name="technician_sequence.xlsx"
+            )
 
 
 # -----------------------------------------------------
-# TECHNICIAN → CSV
+# EXCEL → MACHINE CSV
 # -----------------------------------------------------
 
     elif operation == "Excel to Machine CSV":
@@ -330,13 +327,63 @@ def main():
             st.download_button(
                 "Download Machine CSV",
                 machine_df.to_csv(index=False,sep=';'),
-                file_name="machine_sequence.csv",
-                mime="text/csv"
+                file_name="machine_sequence.csv"
             )
 
 
 # -----------------------------------------------------
-# SPEC → TECHNICIAN (placeholder)
+# TEMPLATE DOWNLOAD
+# -----------------------------------------------------
+
+    elif operation == "Download Template":
+
+        st.info("Download a template from your base CSV")
+
+        seal = st.selectbox("Seal Type",["Main Seal","Separation Seal"])
+
+        file = "MainSealSet2.csv" if seal=="Main Seal" else "SeperationSeal.csv"
+
+        df = safe_read_csv(file)
+
+        file_type = detect_file_type(df)
+
+        tech = convert_machine_to_technician(df,file_type)
+
+        st.download_button(
+            "Download Excel Template",
+            tech.to_excel(index=False),
+            file_name="template.xlsx"
+        )
+
+
+# -----------------------------------------------------
+# VIEW CURRENT TEST
+# -----------------------------------------------------
+
+    elif operation == "View Current Test":
+
+        seal = st.selectbox("Seal Type",["Main Seal","Separation Seal"])
+
+        file = "MainSealSet2.csv" if seal=="Main Seal" else "SeperationSeal.csv"
+
+        df = safe_read_csv(file)
+
+        file_type = detect_file_type(df)
+
+        edited = editable_dataframe(
+            convert_machine_to_technician(df,file_type),
+            "current_editor"
+        )
+
+        st.download_button(
+            "Download Excel",
+            edited.to_excel(index=False),
+            file_name="current_test.xlsx"
+        )
+
+
+# -----------------------------------------------------
+# SPEC PLACEHOLDER
 # -----------------------------------------------------
 
     elif operation == "Spec → Technician Excel":
@@ -345,23 +392,24 @@ def main():
 
         if uploaded:
 
-            st.info("Spec scanner will convert the spec into technician format")
+            st.info("Spec scanner will be added here")
 
-            # temporary placeholder
             df = pd.DataFrame({
-
                 "Step":[1],
                 "Speed_RPM":[0],
                 "Primary seal Gas Pressure (barg)":[0],
                 "Interspace_Pressure_bar":[0],
                 "Duration_s":[60],
                 "Notes":[""]
-
             })
 
             edited = editable_dataframe(df,"spec_editor")
 
-            st.dataframe(edited)
+            st.download_button(
+                "Download Excel",
+                edited.to_excel(index=False),
+                file_name="spec_sequence.xlsx"
+            )
 
 
 if __name__ == "__main__":
