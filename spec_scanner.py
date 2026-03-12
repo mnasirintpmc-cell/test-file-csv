@@ -1,9 +1,15 @@
 import pandas as pd
+import os
 
 try:
     import pyxlsb
 except ImportError:
     raise ImportError("Install pyxlsb: pip install pyxlsb")
+
+try:
+    import openpyxl
+except ImportError:
+    raise ImportError("Install openpyxl: pip install openpyxl")
 
 
 def safe_get(row, idx):
@@ -19,11 +25,34 @@ def to_float(v):
         return None
 
 
+def _detect_engine(file):
+
+    name = None
+
+    if hasattr(file, "name"):
+        name = file.name
+    elif isinstance(file, str):
+        name = file
+
+    if name:
+        ext = os.path.splitext(name)[1].lower()
+
+        if ext == ".xlsb":
+            return "pyxlsb"
+
+        if ext in [".xlsx", ".xlsm"]:
+            return "openpyxl"
+
+    return "openpyxl"
+
+
 def scan_spec(file):
+
+    engine = _detect_engine(file)
 
     sheets = pd.read_excel(
         file,
-        engine="pyxlsb",
+        engine=engine,
         sheet_name=None,
         header=None
     )
@@ -85,7 +114,6 @@ def scan_spec(file):
                     hold = to_float(safe_get(row, step_col+5))
                     remarks = safe_get(row, step_col+8)
 
-                    # PRIMARY PRESSURE RULE
                     primary = None
 
                     if isinstance(primary_cell, str) and "secondary" in primary_cell.lower():
@@ -97,7 +125,6 @@ def scan_spec(file):
                     if primary is None and secondary is not None:
                         primary = secondary + 5
 
-                    # AMB TEMPERATURE
                     if isinstance(temp, str) and temp.upper() == "AMB":
                         temp = 60
 
@@ -109,7 +136,6 @@ def scan_spec(file):
                     bp_de = 0
                     bp_nde = 0
 
-                    # PRESSURE ROUTING
                     if test_mode == 1:
 
                         interspace = 0
@@ -144,6 +170,7 @@ def scan_spec(file):
 
     df = pd.DataFrame(rows)
 
-    df = df.sort_values("Step").reset_index(drop=True)
+    if not df.empty:
+        df = df.sort_values("Step").reset_index(drop=True)
 
     return df
