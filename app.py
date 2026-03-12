@@ -133,8 +133,47 @@ def get_column_mapping(file_type):
 
         }
 
-    return None
+    if file_type == "separation_seal":
 
+        return {
+
+            "machine_to_technician":{
+
+                "TST_SpeedDem":"Speed_RPM",
+                "TST_SepSealFlwSet1":"Sep_Seal_Flow_Set1",
+                "TST_SepSealFlwSet2":"Sep_Seal_Flow_Set2",
+                "TST_SepSealPSet1":"Sep_Seal_Pressure_Set1",
+                "TST_SepSealPSet2":"Sep_Seal_Pressure_Set2",
+                "TST_SepSealControlTyp":"Sep_Seal_Control_Type",
+                "TST_StepDuration":"Duration_s",
+                "TST_APFlag":"Acceptance point",
+                "TST_TempDemand":"Temperature_C",
+                "TST_GasType":"Gas_Type",
+                "TST_MeasurementReq":"Measurement",
+                "TST_TorqueCheck":"Torque_Check"
+
+            },
+
+            "technician_to_machine":{
+
+                "Speed_RPM":"TST_SpeedDem",
+                "Sep_Seal_Flow_Set1":"TST_SepSealFlwSet1",
+                "Sep_Seal_Flow_Set2":"TST_SepSealFlwSet2",
+                "Sep_Seal_Pressure_Set1":"TST_SepSealPSet1",
+                "Sep_Seal_Pressure_Set2":"TST_SepSealPSet2",
+                "Sep_Seal_Control_Type":"TST_SepSealControlTyp",
+                "Duration_s":"TST_StepDuration",
+                "Acceptance point":"TST_APFlag",
+                "Temperature_C":"TST_TempDemand",
+                "Gas_Type":"TST_GasType",
+                "Measurement":"TST_MeasurementReq",
+                "Torque_Check":"TST_TorqueCheck"
+
+            }
+
+        }
+
+    return None
 
 # =====================================================
 # CONVERSION
