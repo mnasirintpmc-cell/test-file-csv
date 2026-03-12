@@ -1,72 +1,23 @@
 import pandas as pd
 
+TECH_COLUMNS = [
+"Step",
+"Speed_RPM",
+"Primary seal Gas Pressure (barg)",
+"Interspace_Pressure_bar",
+"BackPressure_Drive_End_bar",
+"BackPressure_Non_Drive_End_bar",
+"Gas_Injection_bar",
+"Duration_s",
+"Acceptance point",
+"Temperature_C",
+"Gas_Type",
+"Test_Mode",
+"Measurement",
+"Torque_Check",
+"Notes"
+]
 
-# ---------------------------------------------------
-# SPEC TABLE DETECTION
-# ---------------------------------------------------
-
-def _find_test_tables(df):
-
-    tables = []
-
-    for r in range(len(df)):
-        for c in range(len(df.columns)):
-
-            val = str(df.iloc[r, c]).strip().lower()
-
-            if val != "test step":
-                continue
-
-            primary = str(df.iloc[r, c+1]).lower() if c+1 < len(df.columns) else ""
-            secondary = str(df.iloc[r, c+2]).lower() if c+2 < len(df.columns) else ""
-
-            if (
-                "primary seal gas pressure" in primary and
-                "secondary seal gas pressure" in secondary
-            ):
-                tables.append((r, c))
-
-    return tables
-
-
-# ---------------------------------------------------
-# PRESSURE ROUTING
-# ---------------------------------------------------
-
-def _route_pressures(test_mode, secondary):
-
-    inter = 0
-    bp_de = 0
-    bp_nde = 0
-
-    if test_mode == 1:
-        bp_de = secondary
-        bp_nde = secondary
-    else:
-        inter = secondary
-
-    return inter, bp_de, bp_nde
-
-
-# ---------------------------------------------------
-# PRIMARY PRESSURE RULE
-# ---------------------------------------------------
-
-def _resolve_primary(primary_cell, secondary):
-
-    try:
-        return float(primary_cell)
-    except:
-
-        try:
-            return float(secondary) + 5
-        except:
-            return 0
-
-
-# ---------------------------------------------------
-# MAIN SCANNER
-# ---------------------------------------------------
 
 def scan_spec(file):
 
@@ -84,21 +35,24 @@ def scan_spec(file):
         if df is None or df.empty:
             continue
 
-        name = sheet_name.lower()
+        sheet_lower = sheet_name.lower()
 
-        test_mode = 1
-        if "secondary" in name:
-            test_mode = 2
+        mode = 1
+        if "secondary" in sheet_lower:
+            mode = 2
 
-        tables = _find_test_tables(df)
+        for r in range(len(df)):
 
-        for (header_row, step_col) in tables:
+            if str(df.iloc[r,0]).strip().lower() != "test step":
+                continue
 
-            for r in range(header_row + 1, len(df)):
+            header_row = r
 
-                row = df.iloc[r].tolist()
+            for i in range(header_row+1,len(df)):
 
-                step_val = row[step_col]
+                row = df.iloc[i]
+
+                step_val = row[0]
 
                 if step_val is None:
                     continue
@@ -111,39 +65,55 @@ def scan_spec(file):
                 except:
                     continue
 
-                primary_cell = row[step_col + 1]
-                secondary = row[step_col + 2]
-                speed = row[step_col + 3]
-                temp = row[step_col + 4]
-                hold = row[step_col + 5]
-                remarks = row[step_col + 8]
+                primary_spec = row[1]
+                secondary = row[2]
+                speed = row[3]
+                temp = row[4]
+                hold = row[5]
+                remarks = row[8]
 
                 try:
                     secondary = float(secondary)
                 except:
                     secondary = 0
 
-                primary = _resolve_primary(primary_cell, secondary)
+                if mode == 1:
 
-                inter, bp_de, bp_nde = _route_pressures(test_mode, secondary)
+                    try:
+                        primary = float(primary_spec)
+                    except:
+                        primary = secondary + 5
+
+                    inter = 0
+                    bp_de = secondary
+                    bp_nde = secondary
+
+                else:
+
+                    primary = secondary + 5
+                    inter = secondary
+                    bp_de = 0
+                    bp_nde = 0
+
+                ap = 1 if isinstance(remarks,str) and remarks.strip() != "" else 0
 
                 rows.append({
 
-                    "Step": step,
-                    "Speed_RPM": speed,
-                    "Primary seal Gas Pressure (barg)": primary,
-                    "Interspace_Pressure_bar": inter,
-                    "BackPressure_Drive_End_bar": bp_de,
-                    "BackPressure_Non_Drive_End_bar": bp_nde,
-                    "Gas_Injection_bar": 0,
-                    "Duration_s": hold * 60 if hold else 0,
-                    "Acceptance point": 1 if isinstance(remarks, str) else 0,
-                    "Temperature_C": temp,
-                    "Gas_Type": "Air",
-                    "Test_Mode": test_mode,
-                    "Measurement": 1,
-                    "Torque_Check": 0,
-                    "Notes": remarks if remarks else ""
+                    "Step":step,
+                    "Speed_RPM":speed,
+                    "Primary seal Gas Pressure (barg)":primary,
+                    "Interspace_Pressure_bar":inter,
+                    "BackPressure_Drive_End_bar":bp_de,
+                    "BackPressure_Non_Drive_End_bar":bp_nde,
+                    "Gas_Injection_bar":0,
+                    "Duration_s":hold*60 if hold else 0,
+                    "Acceptance point":ap,
+                    "Temperature_C":temp,
+                    "Gas_Type":"Air",
+                    "Test_Mode":mode,
+                    "Measurement":1,
+                    "Torque_Check":0,
+                    "Notes":remarks if remarks else ""
 
                 })
 
