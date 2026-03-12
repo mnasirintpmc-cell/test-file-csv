@@ -350,7 +350,3 @@ def main():
                 excel.getvalue(),
                 file_name="technician_sequence.xlsx"
             )
-
-
-if __name__=="__main__":
-    main()
