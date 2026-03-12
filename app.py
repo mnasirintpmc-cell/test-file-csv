@@ -330,7 +330,7 @@ def main():
 # SPEC → TECHNICIAN
 # -----------------------------------------------------
 
-   elif operation=="Spec → Technician Excel":
+    if operation=="Spec → Technician Excel":
 
         uploaded = st.file_uploader(
             "Upload Spec (.xlsb, .xlsm, .xls)",
