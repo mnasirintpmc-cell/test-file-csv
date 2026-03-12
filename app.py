@@ -213,7 +213,53 @@ def editable_dataframe(df,key,height=500):
 
     return st.session_state[key]
 
+# =====================================================
+# SAFETY VALIDATION
+# =====================================================
 
+def validate_safety(df):
+
+    warnings = []
+
+    if 'Primary seal Gas Pressure (barg)' not in df.columns:
+        return warnings
+
+    for i, row in df.iterrows():
+
+        step = row.get("Step", i+1)
+
+        try:
+            primary = float(row.get('Primary seal Gas Pressure (barg)',0))
+        except:
+            primary = 0
+
+        try:
+            inter = float(row.get('Interspace_Pressure_bar',0))
+        except:
+            inter = 0
+
+        # Rule 1
+        if inter > primary:
+
+            warnings.append(
+                f"Step {step}: Interspace pressure greater than cell pressure"
+            )
+
+        # Rule 2
+        if primary - inter < 0.2 and inter > 0:
+
+            warnings.append(
+                f"Step {step}: Differential pressure < 0.2 bar"
+            )
+
+        # Rule 3
+        if primary < 0 or inter < 0:
+
+            warnings.append(
+                f"Step {step}: Negative pressure detected"
+            )
+
+    return warnings
 # =====================================================
 # MAIN APP
 # =====================================================
