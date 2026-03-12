@@ -6,7 +6,6 @@ import numpy as np
 import math
 import os
 
-
 # =====================================================
 # SAFE CSV READER
 # =====================================================
@@ -15,7 +14,7 @@ def safe_read_csv(file_path_or_buffer):
 
     try:
 
-        encodings = ['utf-8', 'latin-1', 'cp1252', 'iso-8859-1']
+        encodings = ['utf-8','latin-1','cp1252','iso-8859-1']
 
         for enc in encodings:
 
@@ -36,7 +35,7 @@ def safe_read_csv(file_path_or_buffer):
 
                 return df.replace([np.nan, math.inf, -math.inf], 0)
 
-            except Exception:
+            except:
                 continue
 
         return pd.read_csv(file_path_or_buffer, delimiter=';')
@@ -76,37 +75,37 @@ def get_column_mapping(file_type):
 
             'machine_to_technician': {
 
-                'TST_SpeedDem': 'Speed_RPM',
-                'TST_CellPresDemand': 'Primary seal Gas Pressure (barg)',
-                'TST_InterPresDemand': 'Interspace_Pressure_bar',
-                'TST_InterBPDemand_DE': 'BackPressure_Drive_End_bar',
-                'TST_InterBPDemand_NDE': 'BackPressure_Non_Drive_End_bar',
-                'TST_GasInjectionDemand': 'Gas_Injection_bar',
-                'TST_StepDuration': 'Duration_s',
-                'TST_APFlag': 'Acceptance point',
-                'TST_TempDemand': 'Temperature_C',
-                'TST_GasType': 'Gas_Type',
-                'TST_TestMode': 'Test_Mode',
-                'TST_MeasurementReq': 'Measurement',
-                'TST_TorqueCheck': 'Torque_Check'
+                'TST_SpeedDem':'Speed_RPM',
+                'TST_CellPresDemand':'Primary seal Gas Pressure (barg)',
+                'TST_InterPresDemand':'Interspace_Pressure_bar',
+                'TST_InterBPDemand_DE':'BackPressure_Drive_End_bar',
+                'TST_InterBPDemand_NDE':'BackPressure_Non_Drive_End_bar',
+                'TST_GasInjectionDemand':'Gas_Injection_bar',
+                'TST_StepDuration':'Duration_s',
+                'TST_APFlag':'Acceptance point',
+                'TST_TempDemand':'Temperature_C',
+                'TST_GasType':'Gas_Type',
+                'TST_TestMode':'Test_Mode',
+                'TST_MeasurementReq':'Measurement',
+                'TST_TorqueCheck':'Torque_Check'
 
             },
 
             'technician_to_machine': {
 
-                'Speed_RPM': 'TST_SpeedDem',
-                'Primary seal Gas Pressure (barg)': 'TST_CellPresDemand',
-                'Interspace_Pressure_bar': 'TST_InterPresDemand',
-                'BackPressure_Drive_End_bar': 'TST_InterBPDemand_DE',
-                'BackPressure_Non_Drive_End_bar': 'TST_InterBPDemand_NDE',
-                'Gas_Injection_bar': 'TST_GasInjectionDemand',
-                'Duration_s': 'TST_StepDuration',
-                'Acceptance point': 'TST_APFlag',
-                'Temperature_C': 'TST_TempDemand',
-                'Gas_Type': 'TST_GasType',
-                'Test_Mode': 'TST_TestMode',
-                'Measurement': 'TST_MeasurementReq',
-                'Torque_Check': 'TST_TorqueCheck'
+                'Speed_RPM':'TST_SpeedDem',
+                'Primary seal Gas Pressure (barg)':'TST_CellPresDemand',
+                'Interspace_Pressure_bar':'TST_InterPresDemand',
+                'BackPressure_Drive_End_bar':'TST_InterBPDemand_DE',
+                'BackPressure_Non_Drive_End_bar':'TST_InterBPDemand_NDE',
+                'Gas_Injection_bar':'TST_GasInjectionDemand',
+                'Duration_s':'TST_StepDuration',
+                'Acceptance point':'TST_APFlag',
+                'Temperature_C':'TST_TempDemand',
+                'Gas_Type':'TST_GasType',
+                'Test_Mode':'TST_TestMode',
+                'Measurement':'TST_MeasurementReq',
+                'Torque_Check':'TST_TorqueCheck'
 
             }
 
@@ -118,35 +117,35 @@ def get_column_mapping(file_type):
 
             'machine_to_technician': {
 
-                'TST_SpeedDem': 'Speed_RPM',
-                'TST_SepSealFlwSet1': 'Sep_Seal_Flow_Set1',
-                'TST_SepSealFlwSet2': 'Sep_Seal_Flow_Set2',
-                'TST_SepSealPSet1': 'Sep_Seal_Pressure_Set1',
-                'TST_SepSealPSet2': 'Sep_Seal_Pressure_Set2',
-                'TST_SepSealControlTyp': 'Sep_Seal_Control_Type',
-                'TST_StepDuration': 'Duration_s',
-                'TST_APFlag': 'Acceptance point',
-                'TST_TempDemand': 'Temperature_C',
-                'TST_GasType': 'Gas_Type',
-                'TST_MeasurementReq': 'Measurement',
-                'TST_TorqueCheck': 'Torque_Check'
+                'TST_SpeedDem':'Speed_RPM',
+                'TST_SepSealFlwSet1':'Sep_Seal_Flow_Set1',
+                'TST_SepSealFlwSet2':'Sep_Seal_Flow_Set2',
+                'TST_SepSealPSet1':'Sep_Seal_Pressure_Set1',
+                'TST_SepSealPSet2':'Sep_Seal_Pressure_Set2',
+                'TST_SepSealControlTyp':'Sep_Seal_Control_Type',
+                'TST_StepDuration':'Duration_s',
+                'TST_APFlag':'Acceptance point',
+                'TST_TempDemand':'Temperature_C',
+                'TST_GasType':'Gas_Type',
+                'TST_MeasurementReq':'Measurement',
+                'TST_TorqueCheck':'Torque_Check'
 
             },
 
             'technician_to_machine': {
 
-                'Speed_RPM': 'TST_SpeedDem',
-                'Sep_Seal_Flow_Set1': 'TST_SepSealFlwSet1',
-                'Sep_Seal_Flow_Set2': 'TST_SepSealFlwSet2',
-                'Sep_Seal_Pressure_Set1': 'TST_SepSealPSet1',
-                'Sep_Seal_Pressure_Set2': 'TST_SepSealPSet2',
-                'Sep_Seal_Control_Type': 'TST_SepSealControlTyp',
-                'Duration_s': 'TST_StepDuration',
-                'Acceptance point': 'TST_APFlag',
-                'Temperature_C': 'TST_TempDemand',
-                'Gas_Type': 'TST_GasType',
-                'Measurement': 'TST_MeasurementReq',
-                'Torque_Check': 'TST_TorqueCheck'
+                'Speed_RPM':'TST_SpeedDem',
+                'Sep_Seal_Flow_Set1':'TST_SepSealFlwSet1',
+                'Sep_Seal_Flow_Set2':'TST_SepSealFlwSet2',
+                'Sep_Seal_Pressure_Set1':'TST_SepSealPSet1',
+                'Sep_Seal_Pressure_Set2':'TST_SepSealPSet2',
+                'Sep_Seal_Control_Type':'TST_SepSealControlTyp',
+                'Duration_s':'TST_StepDuration',
+                'Acceptance point':'TST_APFlag',
+                'Temperature_C':'TST_TempDemand',
+                'Gas_Type':'TST_GasType',
+                'Measurement':'TST_MeasurementReq',
+                'Torque_Check':'TST_TorqueCheck'
 
             }
 
@@ -165,7 +164,7 @@ def convert_machine_to_technician(df, file_type):
 
     tech_df = df.rename(columns=mapping['machine_to_technician'])
 
-    tech_df.insert(0, 'Step', range(1, len(tech_df)+1))
+    tech_df.insert(0,'Step',range(1,len(tech_df)+1))
 
     if 'Notes' not in tech_df.columns:
         tech_df['Notes'] = ''
@@ -180,21 +179,19 @@ def convert_to_machine_codes(df):
     for col in ['TST_APFlag','TST_MeasurementReq','TST_TorqueCheck']:
 
         if col in df.columns:
-
             df[col] = df[col].map({'Yes':1,'No':0}).fillna(0)
 
     if 'TST_TestMode' in df.columns:
-
         df['TST_TestMode'] = df['TST_TestMode'].map({'Mode 1':1,'Mode 2':2}).fillna(1)
 
     return df
 
 
 # =====================================================
-# EDITABLE TABLE
+# EDITABLE DATAFRAME
 # =====================================================
 
-def editable_dataframe(df, key, height=500):
+def editable_dataframe(df,key,height=500):
 
     if key not in st.session_state:
         st.session_state[key] = df.copy()
@@ -223,7 +220,7 @@ def editable_dataframe(df, key, height=500):
 
 def main():
 
-    st.title("Seal Test Manager")
+    st.title("⚙️ Seal Test Manager")
 
     operation = st.sidebar.radio(
 
@@ -233,14 +230,20 @@ def main():
             "Download Template",
             "Excel to Machine CSV",
             "Machine CSV to Excel",
-            "View Current Test"
+            "View Current Test",
+            "Spec → Technician Excel"
         ]
 
     )
 
+
+# -----------------------------------------------------
+# CSV → TECHNICIAN
+# -----------------------------------------------------
+
     if operation == "Machine CSV to Excel":
 
-        uploaded = st.file_uploader("Upload Machine CSV", type=['csv'])
+        uploaded = st.file_uploader("Upload Machine CSV",type=['csv'])
 
         if uploaded:
 
@@ -249,15 +252,20 @@ def main():
             file_type = detect_file_type(df)
 
             edited = editable_dataframe(
-                convert_machine_to_technician(df, file_type),
+                convert_machine_to_technician(df,file_type),
                 "csv_editor"
             )
 
             st.dataframe(edited)
 
+
+# -----------------------------------------------------
+# TECHNICIAN → CSV
+# -----------------------------------------------------
+
     elif operation == "Excel to Machine CSV":
 
-        uploaded = st.file_uploader("Upload Technician Excel", type=['xlsx'])
+        uploaded = st.file_uploader("Upload Technician Excel",type=['xlsx'])
 
         if uploaded:
 
@@ -265,20 +273,49 @@ def main():
 
             file_type = detect_file_type(df)
 
-            edited = editable_dataframe(df, "excel_editor")
+            edited = editable_dataframe(df,"excel_editor")
 
             mapping = get_column_mapping(file_type)
 
             machine_df = convert_to_machine_codes(
                 edited.rename(columns=mapping['technician_to_machine'])
-            ).drop(columns=['Step','Notes'], errors='ignore')
+            ).drop(columns=['Step','Notes'],errors='ignore')
 
             st.download_button(
                 "Download Machine CSV",
-                machine_df.to_csv(index=False, sep=';'),
+                machine_df.to_csv(index=False,sep=';'),
                 file_name="machine_sequence.csv",
                 mime="text/csv"
             )
+
+
+# -----------------------------------------------------
+# SPEC → TECHNICIAN (placeholder)
+# -----------------------------------------------------
+
+    elif operation == "Spec → Technician Excel":
+
+        uploaded = st.file_uploader("Upload Spec (.xlsb)",type=['xlsb'])
+
+        if uploaded:
+
+            st.info("Spec scanner will convert the spec into technician format")
+
+            # temporary placeholder
+            df = pd.DataFrame({
+
+                "Step":[1],
+                "Speed_RPM":[0],
+                "Primary seal Gas Pressure (barg)":[0],
+                "Interspace_Pressure_bar":[0],
+                "Duration_s":[60],
+                "Notes":[""]
+
+            })
+
+            edited = editable_dataframe(df,"spec_editor")
+
+            st.dataframe(edited)
 
 
 if __name__ == "__main__":
