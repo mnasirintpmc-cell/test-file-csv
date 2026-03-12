@@ -1,24 +1,5 @@
 import pandas as pd
 
-try:
-    import pyxlsb
-except ImportError:
-    raise ImportError("Install pyxlsb: pip install pyxlsb")
-
-
-def safe_get(row, idx):
-    if idx < len(row):
-        return row[idx]
-    return None
-
-
-def to_float(v):
-    try:
-        return float(v)
-    except:
-        return None
-
-
 def scan_spec(file):
 
     sheets = pd.read_excel(
@@ -37,6 +18,7 @@ def scan_spec(file):
 
         name_lower = sheet_name.lower()
 
+        # determine test mode
         test_mode = 1
         if "secondary" in name_lower:
             test_mode = 2
@@ -50,7 +32,6 @@ def scan_spec(file):
                 if cell != "test step":
                     continue
 
-                # validate real test table header
                 col_primary = str(df.iloc[i, j+1]).lower() if j+1 < len(df.columns) else ""
                 col_secondary = str(df.iloc[i, j+2]).lower() if j+2 < len(df.columns) else ""
 
@@ -62,11 +43,11 @@ def scan_spec(file):
 
                 step_col = j
 
-                for k in range(i+1, len(df)):
+                for k in range(i + 1, len(df)):
 
                     row = df.iloc[k].tolist()
 
-                    step_val = safe_get(row, step_col)
+                    step_val = row[step_col]
 
                     if step_val is None:
                         continue
@@ -79,37 +60,33 @@ def scan_spec(file):
                     except:
                         continue
 
-                    primary_cell = safe_get(row, step_col+1)
-                    secondary = to_float(safe_get(row, step_col+2))
-                    speed = to_float(safe_get(row, step_col+3))
-                    temp = safe_get(row, step_col+4)
-                    hold = to_float(safe_get(row, step_col+5))
-                    remarks = safe_get(row, step_col+8)
+                    primary_cell = row[step_col + 1]
+                    secondary = row[step_col + 2]
+                    speed = row[step_col + 3]
+                    temp = row[step_col + 4]
+                    hold = row[step_col + 5]
+                    remarks = row[step_col + 8]
 
-                    # primary rule
+                    # pressure rule
                     primary = None
 
-                    if isinstance(primary_cell, str) and "secondary" in primary_cell.lower():
-                        if secondary is not None:
-                            primary = secondary + 5
-                    else:
-                        primary = to_float(primary_cell)
+                    try:
+                        primary = float(primary_cell)
+                    except:
+                        try:
+                            primary = float(secondary) + 5
+                        except:
+                            primary = 0
 
-                    if primary is None and secondary is not None:
-                        primary = secondary + 5
+                    try:
+                        secondary = float(secondary)
+                    except:
+                        secondary = 0
 
-                    if isinstance(temp, str) and temp.upper() == "AMB":
-                        temp = 60
-
-                    duration = None
-                    if hold is not None:
-                        duration = int(hold * 60)
-
-                    acceptance = 1 if isinstance(remarks, str) else 0
-
-                    interspace = None
-                    bp_de = None
-                    bp_nde = None
+                    # pressure routing
+                    interspace = 0
+                    bp_de = 0
+                    bp_nde = 0
 
                     if test_mode == 1:
                         bp_de = secondary
@@ -120,25 +97,23 @@ def scan_spec(file):
                     rows.append({
 
                         "Step": step,
-                        "Test_Name": sheet_name,
                         "Speed_RPM": speed,
                         "Primary seal Gas Pressure (barg)": primary,
                         "Interspace_Pressure_bar": interspace,
                         "BackPressure_Drive_End_bar": bp_de,
                         "BackPressure_Non_Drive_End_bar": bp_nde,
-                        "Gas_Injection_bar": None,
-                        "Duration_s": duration,
+                        "Gas_Injection_bar": 0,
+                        "Duration_s": hold * 60 if hold else 0,
+                        "Acceptance point": 1 if isinstance(remarks,str) else 0,
                         "Temperature_C": temp,
-                        "Test_Mode": test_mode,
-                        "Acceptance point": acceptance,
-                        "Measurement": 1,
-                        "Torque_Check": None,
                         "Gas_Type": "Air",
-                        "Notes": remarks
+                        "Test_Mode": test_mode,
+                        "Measurement": 1,
+                        "Torque_Check": 0,
+                        "Notes": remarks if remarks else ""
+
                     })
 
     df = pd.DataFrame(rows)
-
-    df = df.fillna("NA")
 
     return df
