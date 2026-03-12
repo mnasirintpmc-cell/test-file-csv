@@ -440,10 +440,10 @@ def main():
 
     elif operation=="Spec → Technician Excel":
 
-       uploaded = st.file_uploader(
-    "Upload Spec (.xlsb, .xlsm, .xlsx)",
-    type=["xlsb","xlsm","xlsx"]
-)
+        uploaded = st.file_uploader(
+            "Upload Spec (.xlsb, .xlsm, .xlsx)",
+            type=["xlsb","xlsm","xlsx"]
+        )
 
         if uploaded:
 
