@@ -1,6 +1,5 @@
 import pandas as pd
 import os
-import io
 
 try:
     import pyxlsb
@@ -28,48 +27,29 @@ def to_float(v):
 
 def _detect_engine(file):
 
-    name = None
+    filename = ""
 
-    # case 1 — filepath
     if isinstance(file, str):
-        name = file
+        filename = file.lower()
 
-    # case 2 — Streamlit UploadedFile
     elif hasattr(file, "name"):
-        name = file.name
+        filename = file.name.lower()
 
-    if name:
+    if filename.endswith(".xlsb"):
+        return "pyxlsb"
 
-        ext = os.path.splitext(name)[1].lower()
+    if filename.endswith(".xlsx") or filename.endswith(".xlsm"):
+        return "openpyxl"
 
-        if ext == ".xlsb":
-            return "pyxlsb"
-
-        if ext in [".xlsx", ".xlsm"]:
-            return "openpyxl"
-
-    # fallback (safe default)
     return "openpyxl"
-
-
-def _prepare_file(file):
-
-    # Streamlit UploadedFile → BytesIO
-    if hasattr(file, "read"):
-        data = file.read()
-        return io.BytesIO(data)
-
-    return file
 
 
 def scan_spec(file):
 
     engine = _detect_engine(file)
 
-    file_buffer = _prepare_file(file)
-
     sheets = pd.read_excel(
-        file_buffer,
+        file,
         engine=engine,
         sheet_name=None,
         header=None
