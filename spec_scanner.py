@@ -47,7 +47,6 @@ def scan_spec(file):
 
     engine = _detect_engine(file)
 
-    # ensure formulas are evaluated for xlsx/xlsm
     if engine == "openpyxl":
         sheets = pd.read_excel(
             file,
@@ -71,7 +70,6 @@ def scan_spec(file):
         if df is None or df.empty:
             continue
 
-        # Normalize vendor header variations
         df = df.replace({
             "Test Point": "Test Step",
             "Inboard Seal Pressure": "Primary seal Gas Pressure",
@@ -124,6 +122,14 @@ def scan_spec(file):
 
                     primary_cell = safe_get(row, step_col+1)
                     secondary = to_float(safe_get(row, step_col+2))
+
+                    # fallback for API-style tables with % and Bar g columns
+                    if primary_cell is None or primary_cell == "":
+                        primary_cell = safe_get(row, step_col+2)
+
+                    if secondary is None:
+                        secondary = to_float(safe_get(row, step_col+4))
+
                     speed = to_float(safe_get(row, step_col+3))
                     temp = safe_get(row, step_col+4)
                     hold = to_float(safe_get(row, step_col+5))
