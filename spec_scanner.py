@@ -71,6 +71,14 @@ def scan_spec(file):
         if df is None or df.empty:
             continue
 
+        # Normalize vendor header variations
+        df = df.replace({
+            "Test Point": "Test Step",
+            "Inboard Seal Pressure": "Primary seal Gas Pressure",
+            "Outboard Seal Pressure": "Secondary seal Gas Pressure",
+            "Process Side Gas Pressure": "Secondary seal Gas Pressure"
+        })
+
         name_lower = sheet_name.lower()
 
         test_mode = 1
@@ -83,27 +91,15 @@ def scan_spec(file):
 
                 cell = str(df.iloc[i, j]).strip().lower()
 
-                # accept both header variations
-                if cell not in ["test step", "test point"]:
+                if cell != "test step":
                     continue
 
                 col_primary = str(df.iloc[i, j+1]).lower() if j+1 < len(df.columns) else ""
                 col_secondary = str(df.iloc[i, j+2]).lower() if j+2 < len(df.columns) else ""
 
-                primary_names = [
-                    "primary seal gas pressure",
-                    "inboard seal pressure"
-                ]
-
-                secondary_names = [
-                    "secondary seal gas pressure",
-                    "process side gas pressure",
-                    "outboard seal pressure"
-                ]
-
                 if (
-                    not any(name in col_primary for name in primary_names)
-                    or not any(name in col_secondary for name in secondary_names)
+                    "primary seal gas pressure" not in col_primary
+                    or "secondary seal gas pressure" not in col_secondary
                 ):
                     continue
 
