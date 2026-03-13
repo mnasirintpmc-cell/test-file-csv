@@ -1,5 +1,4 @@
 import pandas as pd
-import os
 
 try:
     import pyxlsb
@@ -27,18 +26,18 @@ def to_float(v):
 
 def _detect_engine(file):
 
-    filename = ""
+    name = ""
 
-    if isinstance(file, str):
-        filename = file.lower()
+    if hasattr(file, "name"):
+        name = file.name.lower()
 
-    elif hasattr(file, "name"):
-        filename = file.name.lower()
+    elif isinstance(file, str):
+        name = file.lower()
 
-    if filename.endswith(".xlsb"):
+    if name.endswith(".xlsb"):
         return "pyxlsb"
 
-    if filename.endswith(".xlsx") or filename.endswith(".xlsm"):
+    if name.endswith(".xlsx") or name.endswith(".xlsm"):
         return "openpyxl"
 
     return "openpyxl"
@@ -48,12 +47,22 @@ def scan_spec(file):
 
     engine = _detect_engine(file)
 
-    sheets = pd.read_excel(
-        file,
-        engine=engine,
-        sheet_name=None,
-        header=None
-    )
+    # ensure formulas are evaluated for xlsx/xlsm
+    if engine == "openpyxl":
+        sheets = pd.read_excel(
+            file,
+            engine=engine,
+            sheet_name=None,
+            header=None,
+            engine_kwargs={"data_only": True}
+        )
+    else:
+        sheets = pd.read_excel(
+            file,
+            engine=engine,
+            sheet_name=None,
+            header=None
+        )
 
     rows = []
 
