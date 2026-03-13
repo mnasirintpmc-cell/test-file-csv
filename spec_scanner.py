@@ -70,6 +70,7 @@ def scan_spec(file):
         if df is None or df.empty:
             continue
 
+        # normalize vendor header variations
         df = df.replace({
             "Test Point": "Test Step",
             "Inboard Seal Pressure": "Primary seal Gas Pressure",
@@ -92,8 +93,21 @@ def scan_spec(file):
                 if cell != "test step":
                     continue
 
-                col_primary = str(df.iloc[i, j+1]).lower() if j+1 < len(df.columns) else ""
-                col_secondary = str(df.iloc[i, j+2]).lower() if j+2 < len(df.columns) else ""
+                col_primary = ""
+                col_secondary = ""
+
+                if j+1 < len(df.columns):
+                    col_primary = str(df.iloc[i, j+1]).lower()
+
+                if j+2 < len(df.columns):
+                    col_secondary = str(df.iloc[i, j+2]).lower()
+
+                # check header row above (for API specs)
+                if "primary seal gas pressure" not in col_primary and i > 0:
+                    col_primary = str(df.iloc[i-1, j+1]).lower()
+
+                if "secondary seal gas pressure" not in col_secondary and i > 0:
+                    col_secondary = str(df.iloc[i-1, j+2]).lower()
 
                 if (
                     "primary seal gas pressure" not in col_primary
@@ -122,14 +136,6 @@ def scan_spec(file):
 
                     primary_cell = safe_get(row, step_col+1)
                     secondary = to_float(safe_get(row, step_col+2))
-
-                    # fallback for API-style tables with % and Bar g columns
-                    if primary_cell is None or primary_cell == "":
-                        primary_cell = safe_get(row, step_col+2)
-
-                    if secondary is None:
-                        secondary = to_float(safe_get(row, step_col+4))
-
                     speed = to_float(safe_get(row, step_col+3))
                     temp = safe_get(row, step_col+4)
                     hold = to_float(safe_get(row, step_col+5))
