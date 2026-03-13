@@ -83,15 +83,27 @@ def scan_spec(file):
 
                 cell = str(df.iloc[i, j]).strip().lower()
 
-                if cell != "test step":
+                # accept both header variations
+                if cell not in ["test step", "test point"]:
                     continue
 
                 col_primary = str(df.iloc[i, j+1]).lower() if j+1 < len(df.columns) else ""
                 col_secondary = str(df.iloc[i, j+2]).lower() if j+2 < len(df.columns) else ""
 
+                primary_names = [
+                    "primary seal gas pressure",
+                    "inboard seal pressure"
+                ]
+
+                secondary_names = [
+                    "secondary seal gas pressure",
+                    "process side gas pressure",
+                    "outboard seal pressure"
+                ]
+
                 if (
-                    "primary seal gas pressure" not in col_primary
-                    or "secondary seal gas pressure" not in col_secondary
+                    not any(name in col_primary for name in primary_names)
+                    or not any(name in col_secondary for name in secondary_names)
                 ):
                     continue
 
