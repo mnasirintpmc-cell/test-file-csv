@@ -68,20 +68,23 @@ def scan_spec(file):
         if "secondary" in name_lower:
             test_mode = 2
 
+        table_found = False
+
         for i in range(len(df)):
+
+            if table_found:
+                break
 
             for j in range(len(df.columns)):
 
                 cell = str(df.iloc[i, j]).strip().lower()
 
-                # accept both header variants
                 if cell != "test step" and cell != "test point":
                     continue
 
                 col_primary = str(df.iloc[i, j+1]).lower() if j+1 < len(df.columns) else ""
                 col_secondary = str(df.iloc[i, j+2]).lower() if j+2 < len(df.columns) else ""
 
-                # support vendor pressure naming
                 primary_ok = (
                     "primary seal gas pressure" in col_primary
                     or "inboard seal pressure" in col_primary
@@ -97,6 +100,8 @@ def scan_spec(file):
                     continue
 
                 step_col = j
+
+                table_found = True
 
                 for k in range(i+1, len(df)):
 
@@ -178,6 +183,8 @@ def scan_spec(file):
                         "Notes": remarks if remarks else ""
 
                     })
+
+                break
 
     df = pd.DataFrame(rows)
 
