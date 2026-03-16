@@ -7,7 +7,7 @@ import io
 import os
 from datetime import datetime
 from spec_scanner import scan_spec
-
+from validator import validate_sequence
 
 # =====================================================
 # SAFE CSV READER
