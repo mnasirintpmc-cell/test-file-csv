@@ -1,4 +1,3 @@
-
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -134,47 +133,8 @@ def get_column_mapping(file_type):
 
         }
 
-    if file_type == "separation_seal":
-
-        return {
-
-            "machine_to_technician":{
-
-                "TST_SpeedDem":"Speed_RPM",
-                "TST_SepSealFlwSet1":"Sep_Seal_Flow_Set1",
-                "TST_SepSealFlwSet2":"Sep_Seal_Flow_Set2",
-                "TST_SepSealPSet1":"Sep_Seal_Pressure_Set1",
-                "TST_SepSealPSet2":"Sep_Seal_Pressure_Set2",
-                "TST_SepSealControlTyp":"Sep_Seal_Control_Type",
-                "TST_StepDuration":"Duration_s",
-                "TST_APFlag":"Acceptance point",
-                "TST_TempDemand":"Temperature_C",
-                "TST_GasType":"Gas_Type",
-                "TST_MeasurementReq":"Measurement",
-                "TST_TorqueCheck":"Torque_Check"
-
-            },
-
-            "technician_to_machine":{
-
-                "Speed_RPM":"TST_SpeedDem",
-                "Sep_Seal_Flow_Set1":"TST_SepSealFlwSet1",
-                "Sep_Seal_Flow_Set2":"TST_SepSealFlwSet2",
-                "Sep_Seal_Pressure_Set1":"TST_SepSealPSet1",
-                "Sep_Seal_Pressure_Set2":"TST_SepSealPSet2",
-                "Sep_Seal_Control_Type":"TST_SepSealControlTyp",
-                "Duration_s":"TST_StepDuration",
-                "Acceptance point":"TST_APFlag",
-                "Temperature_C":"TST_TempDemand",
-                "Gas_Type":"TST_GasType",
-                "Measurement":"TST_MeasurementReq",
-                "Torque_Check":"TST_TorqueCheck"
-
-            }
-
-        }
-
     return None
+
 
 # =====================================================
 # CONVERSION
@@ -194,23 +154,11 @@ def convert_machine_to_technician(df,file_type):
     return tech_df
 
 
-def convert_to_machine_codes(df):
-
-    df = df.copy()
-
-    for col in ["TST_APFlag","TST_MeasurementReq","TST_TorqueCheck"]:
-
-        if col in df.columns:
-            df[col] = df[col].map({"Yes":1,"No":0}).fillna(0)
-
-    return df
-
-
 # =====================================================
-# PROFESSIONAL EXCEL EXPORT
+# EXCEL EXPORT
 # =====================================================
 
-def create_professional_excel_from_data(df,file_type):
+def create_professional_excel_from_data(df,file_type,spec_name=""):
 
     df = df.replace({np.nan:""})
 
@@ -226,13 +174,11 @@ def create_professional_excel_from_data(df,file_type):
         ws = writer.sheets["TEST_SEQUENCE"]
 
         header = wb.add_format({
-
             "bold":True,
             "align":"center",
             "border":1,
             "fg_color":"#366092",
             "font_color":"white"
-
         })
 
         cell = wb.add_format({"border":1,"align":"center"})
@@ -270,9 +216,13 @@ def create_professional_excel_from_data(df,file_type):
             )
 
         instr.write(12,1,"SEAL TEST SEQUENCE")
-        instr.write(14,1,"1. Edit sequence as required")
-        instr.write(15,1,"2. Maintain safe pressure relationships")
-        instr.write(16,1,"3. Upload file back to system")
+
+        if spec_name:
+            instr.write(13,1,f"Source Spec: {spec_name}")
+
+        instr.write(15,1,"1. Edit sequence as required")
+        instr.write(16,1,"2. Maintain safe pressure relationships")
+        instr.write(17,1,"3. Upload file back to system")
 
     output.seek(0)
 
@@ -312,136 +262,15 @@ def main():
         "Operation",
 
         [
-
-            "Download Template",
-            "Machine CSV → Technician Excel",
-            "Technician Excel → Machine CSV",
-            "View Current Test",
             "Spec → Technician Excel"
-
         ]
 
     )
 
-    base_dir = os.path.dirname(__file__)
-
-
-# -----------------------------------------------------
-# DOWNLOAD TEMPLATE
-# -----------------------------------------------------
-
-    if operation=="Download Template":
-
-        seal = st.selectbox("Seal Type",["Main Seal","Separation Seal"])
-
-        template="MainSealSet2.csv" if seal=="Main Seal" else "SeperationSeal.csv"
-
-        file_type="main_seal" if seal=="Main Seal" else "separation_seal"
-
-        df = safe_read_csv(os.path.join(base_dir,template))
-
-        tech_df = convert_machine_to_technician(df,file_type)
-
-        excel = create_professional_excel_from_data(tech_df,file_type)
-
-        st.download_button(
-            "Download Template",
-            excel.getvalue(),
-            file_name="template.xlsx"
-        )
-
-
-# -----------------------------------------------------
-# MACHINE CSV → TECHNICIAN
-# -----------------------------------------------------
-
-    elif operation=="Machine CSV → Technician Excel":
-
-        uploaded = st.file_uploader("Upload Machine CSV",type=["csv"])
-
-        if uploaded:
-
-            df = safe_read_csv(uploaded)
-
-            file_type = detect_file_type(df)
-
-            tech = convert_machine_to_technician(df,file_type)
-
-            edited = editable_dataframe(tech)
-
-            excel = create_professional_excel_from_data(edited,file_type)
-
-            st.download_button(
-                "Download Technician Excel",
-                excel.getvalue(),
-                file_name="technician_sequence.xlsx"
-            )
-
-
-# -----------------------------------------------------
-# TECHNICIAN → MACHINE CSV
-# -----------------------------------------------------
-
-    elif operation=="Technician Excel → Machine CSV":
-
-        uploaded = st.file_uploader("Upload Technician Excel",type=["xlsx"])
-
-        if uploaded:
-
-            df = pd.read_excel(uploaded)
-
-            file_type = detect_file_type(df)
-
-            edited = editable_dataframe(df)
-
-            mapping = get_column_mapping(file_type)
-
-            machine_df = convert_to_machine_codes(
-                edited.rename(columns=mapping["technician_to_machine"])
-            ).drop(columns=["Step","Notes"],errors="ignore")
-
-            st.download_button(
-                "Download Machine CSV",
-                machine_df.to_csv(index=False,sep=";"),
-                file_name="machine_sequence.csv"
-            )
-
-
-# -----------------------------------------------------
-# VIEW CURRENT TEST
-# -----------------------------------------------------
-
-    elif operation=="View Current Test":
-
-        seal = st.selectbox("Seal Type",["Main Seal","Separation Seal"])
-
-        template="MainSealSet2.csv" if seal=="Main Seal" else "SeperationSeal.csv"
-
-        df = safe_read_csv(os.path.join(base_dir,template))
-
-        file_type = detect_file_type(df)
-
-        edited = editable_dataframe(
-            convert_machine_to_technician(df,file_type)
-        )
-
-        excel = create_professional_excel_from_data(edited,file_type)
-
-        st.download_button(
-            "Download Excel",
-            excel.getvalue(),
-            file_name="current_test.xlsx"
-        )
-
-
-# -----------------------------------------------------
-# SPEC → TECHNICIAN
-# -----------------------------------------------------
-
-    elif operation=="Spec → Technician Excel":
+    if operation=="Spec → Technician Excel":
 
         uploaded = st.file_uploader(
-            "Upload Spec (.xlsb, .xlsm, .xlsx)",
+            "Upload Spec",
             type=["xlsb","xlsm","xlsx"]
         )
 
@@ -451,7 +280,11 @@ def main():
 
             edited = editable_dataframe(spec_df)
 
-            excel = create_professional_excel_from_data(edited,"main_seal")
+            excel = create_professional_excel_from_data(
+                edited,
+                "main_seal",
+                uploaded.name
+            )
 
             st.download_button(
                 "Download Technician Excel",
