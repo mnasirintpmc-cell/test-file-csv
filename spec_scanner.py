@@ -5,6 +5,11 @@ try:
 except ImportError:
     raise ImportError("Install pyxlsb: pip install pyxlsb")
 
+try:
+    import openpyxl
+except ImportError:
+    raise ImportError("Install openpyxl: pip install openpyxl")
+
 
 def safe_get(row, idx):
     if idx < len(row):
@@ -19,14 +24,43 @@ def to_float(v):
         return None
 
 
+def _detect_engine(file):
+
+    name = ""
+
+    if hasattr(file, "name"):
+        name = file.name.lower()
+    elif isinstance(file, str):
+        name = file.lower()
+
+    if name.endswith(".xlsb"):
+        return "pyxlsb"
+
+    if name.endswith(".xlsx") or name.endswith(".xlsm"):
+        return "openpyxl"
+
+    return "openpyxl"
+
+
 def scan_spec(file):
 
-    sheets = pd.read_excel(
-        file,
-        engine="pyxlsb",
-        sheet_name=None,
-        header=None
-    )
+    engine = _detect_engine(file)
+
+    if engine == "openpyxl":
+        sheets = pd.read_excel(
+            file,
+            engine=engine,
+            sheet_name=None,
+            header=None,
+            engine_kwargs={"data_only": True}
+        )
+    else:
+        sheets = pd.read_excel(
+            file,
+            engine=engine,
+            sheet_name=None,
+            header=None
+        )
 
     rows = []
 
@@ -47,19 +81,43 @@ def scan_spec(file):
 
                 cell = str(df.iloc[i, j]).strip().lower()
 
-                if cell != "test step":
+                # accept both step labels
+                if cell not in ["test step", "test point"]:
                     continue
 
-                col_primary = str(df.iloc[i, j+1]).lower() if j+1 < len(df.columns) else ""
-                col_secondary = str(df.iloc[i, j+2]).lower() if j+2 < len(df.columns) else ""
+                col1 = str(df.iloc[i, j+1]).lower() if j+1 < len(df.columns) else ""
+                col2 = str(df.iloc[i, j+2]).lower() if j+2 < len(df.columns) else ""
+                col3 = str(df.iloc[i, j+3]).lower() if j+3 < len(df.columns) else ""
+                col4 = str(df.iloc[i, j+4]).lower() if j+4 < len(df.columns) else ""
 
-                if (
-                    "primary seal gas pressure" not in col_primary
-                    or "secondary seal gas pressure" not in col_secondary
-                ):
+                primary_names = [
+                    "primary seal gas pressure",
+                    "inboard seal pressure"
+                ]
+
+                secondary_names = [
+                    "secondary seal gas pressure",
+                    "process side gas pressure",
+                    "outboard seal pressure"
+                ]
+
+                if not any(name in col1 for name in primary_names):
+                    continue
+
+                if not any(name in col3 for name in secondary_names):
                     continue
 
                 step_col = j
+
+                # detect API format (two pressure columns)
+                api_format = "inboard seal pressure" in col1
+
+                if api_format:
+                    primary_offset = 2
+                    secondary_offset = 4
+                else:
+                    primary_offset = 1
+                    secondary_offset = 2
 
                 for k in range(i+1, len(df)):
 
@@ -78,14 +136,14 @@ def scan_spec(file):
                     except:
                         continue
 
-                    primary_cell = safe_get(row, step_col+1)
-                    secondary = to_float(safe_get(row, step_col+2))
-                    speed = to_float(safe_get(row, step_col+3))
-                    temp = safe_get(row, step_col+4)
-                    hold = to_float(safe_get(row, step_col+5))
-                    remarks = safe_get(row, step_col+8)
+                    primary_cell = safe_get(row, step_col + primary_offset)
+                    secondary = to_float(safe_get(row, step_col + secondary_offset))
 
-                    # PRIMARY PRESSURE RULE
+                    speed = to_float(safe_get(row, step_col + 3))
+                    temp = safe_get(row, step_col + 4)
+                    hold = to_float(safe_get(row, step_col + 5))
+                    remarks = safe_get(row, step_col + 8)
+
                     primary = None
 
                     if isinstance(primary_cell, str) and "secondary" in primary_cell.lower():
@@ -97,8 +155,7 @@ def scan_spec(file):
                     if primary is None and secondary is not None:
                         primary = secondary + 5
 
-                    # AMB TEMPERATURE
-                    if isinstance(temp, str) and temp.upper() == "AMB":
+                    if isinstance(temp, str) and str(temp).upper() == "AMB":
                         temp = 60
 
                     duration = int(hold * 60) if hold is not None else 0
@@ -109,15 +166,11 @@ def scan_spec(file):
                     bp_de = 0
                     bp_nde = 0
 
-                    # PRESSURE ROUTING
                     if test_mode == 1:
-
                         interspace = 0
                         bp_de = secondary
                         bp_nde = secondary
-
                     else:
-
                         interspace = secondary
                         bp_de = 0
                         bp_nde = 0
@@ -144,6 +197,7 @@ def scan_spec(file):
 
     df = pd.DataFrame(rows)
 
-    df = df.sort_values("Step").reset_index(drop=True)
+    if not df.empty:
+        df = df.sort_values("Step").reset_index(drop=True)
 
     return df
