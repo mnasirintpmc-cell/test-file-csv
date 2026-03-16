@@ -1,204 +1,297 @@
+import streamlit as st
 import pandas as pd
-
-try:
-    import pyxlsb
-except ImportError:
-    raise ImportError("Install pyxlsb: pip install pyxlsb")
-
-try:
-    import openpyxl
-except ImportError:
-    raise ImportError("Install openpyxl: pip install openpyxl")
+import numpy as np
+import io
+import os
+from datetime import datetime
+from spec_scanner import scan_spec
 
 
-def safe_get(row, idx):
-    if idx is None:
-        return None
-    if idx < len(row):
-        return row[idx]
-    return None
+# =====================================================
+# SAFE CSV READER
+# =====================================================
 
+def safe_read_csv(file_path_or_buffer):
 
-def to_float(v):
-    try:
-        return float(v)
-    except:
-        return None
+    encodings = ["utf-8","latin-1","cp1252","iso-8859-1"]
 
-
-def _detect_engine(file):
-
-    name = ""
-
-    if hasattr(file, "name"):
-        name = file.name.lower()
-
-    elif isinstance(file, str):
-        name = file.lower()
-
-    if name.endswith(".xlsb"):
-        return "pyxlsb"
-
-    if name.endswith(".xlsx") or name.endswith(".xlsm"):
-        return "openpyxl"
-
-    return "openpyxl"
-
-
-def find_column(header, keyword):
-
-    keyword = keyword.lower()
-
-    for idx, col in enumerate(header):
-        if keyword in str(col).lower():
-            return idx
-
-    return None
-
-
-def scan_spec(file):
-
-    engine = _detect_engine(file)
-
-    sheets = pd.read_excel(
-        file,
-        engine=engine,
-        sheet_name=None,
-        header=None
-    )
-
-    rows = []
-
-    for sheet_name, df in sheets.items():
-
-        if df is None or df.empty:
+    for enc in encodings:
+        try:
+            df = pd.read_csv(
+                file_path_or_buffer,
+                delimiter=";",
+                encoding=enc
+            )
+            return df
+        except:
             continue
 
-        name_lower = sheet_name.lower()
+    st.error("CSV read error")
+    return pd.DataFrame()
 
-        test_mode = 1
-        if "secondary" in name_lower:
-            test_mode = 2
 
-        for i in range(len(df)):
+# =====================================================
+# SAFETY VALIDATION
+# =====================================================
 
-            cell = str(df.iloc[i, 0]).lower()
+def validate_safety(df):
 
-            if "test step" not in cell:
-                continue
+    warnings = []
 
-            header = df.iloc[i].astype(str).tolist()
+    if "Primary seal Gas Pressure (barg)" not in df.columns:
+        return warnings
 
-            step_col = find_column(header, "test step")
-            primary_col = find_column(header, "primary seal gas pressure")
-            secondary_col = find_column(header, "secondary seal gas pressure")
-            speed_col = find_column(header, "speed")
-            temp_col = find_column(header, "temp")
-            hold_col = find_column(header, "hold")
-            remarks_col = find_column(header, "remark")
+    for i,row in df.iterrows():
 
-            for k in range(i + 1, len(df)):
+        step = row.get("Step", i+1)
 
-                row = df.iloc[k].tolist()
+        try:
+            primary = float(row.get("Primary seal Gas Pressure (barg)",0))
+        except:
+            primary = 0
 
-                step_val = safe_get(row, step_col)
+        try:
+            inter = float(row.get("Interspace_Pressure_bar",0))
+        except:
+            inter = 0
 
-                if step_val is None:
-                    continue
+        if inter > primary:
+            warnings.append(
+                f"Step {step}: Interspace pressure greater than primary"
+            )
 
-                step_text = str(step_val).strip()
+        if primary - inter < 0.2 and inter > 0:
+            warnings.append(
+                f"Step {step}: Differential pressure < 0.2 bar"
+            )
 
-                if step_text == "":
-                    continue
+    return warnings
 
-                if "end of" in step_text.lower():
-                    break
 
-                step_num = to_float(step_text)
+# =====================================================
+# FILE TYPE DETECTION
+# =====================================================
 
-                if step_num is None or pd.isna(step_num):
-                    continue
+def detect_file_type(df):
 
-                try:
-                    step = int(step_num)
-                except:
-                    continue
+    cols = df.columns.tolist()
 
-                primary_cell = safe_get(row, primary_col)
-                secondary_cell = safe_get(row, secondary_col)
+    if "TST_CellPresDemand" in cols or "Primary seal Gas Pressure (barg)" in cols:
+        return "main_seal"
 
-                secondary = to_float(secondary_cell)
+    if "TST_SepSealFlwSet1" in cols or "Sep_Seal_Flow_Set1" in cols:
+        return "separation_seal"
 
-                if secondary is None:
-                    secondary = 0
+    return "unknown"
 
-                if isinstance(primary_cell, str) and "secondary" in primary_cell.lower():
-                    primary = secondary + 5
+
+# =====================================================
+# COLUMN MAPPING
+# =====================================================
+
+def get_column_mapping(file_type):
+
+    if file_type == "main_seal":
+
+        return {
+
+            "machine_to_technician":{
+
+                "TST_SpeedDem":"Speed_RPM",
+                "TST_CellPresDemand":"Primary seal Gas Pressure (barg)",
+                "TST_InterPresDemand":"Interspace_Pressure_bar",
+                "TST_InterBPDemand_DE":"BackPressure_Drive_End_bar",
+                "TST_InterBPDemand_NDE":"BackPressure_Non_Drive_End_bar",
+                "TST_GasInjectionDemand":"Gas_Injection_bar",
+                "TST_StepDuration":"Duration_s",
+                "TST_APFlag":"Acceptance point",
+                "TST_TempDemand":"Temperature_C",
+                "TST_GasType":"Gas_Type",
+                "TST_TestMode":"Test_Mode",
+                "TST_MeasurementReq":"Measurement",
+                "TST_TorqueCheck":"Torque_Check"
+
+            },
+
+            "technician_to_machine":{
+
+                "Speed_RPM":"TST_SpeedDem",
+                "Primary seal Gas Pressure (barg)":"TST_CellPresDemand",
+                "Interspace_Pressure_bar":"TST_InterPresDemand",
+                "BackPressure_Drive_End_bar":"TST_InterBPDemand_DE",
+                "BackPressure_Non_Drive_End_bar":"TST_InterBPDemand_NDE",
+                "Gas_Injection_bar":"TST_GasInjectionDemand",
+                "Duration_s":"TST_StepDuration",
+                "Acceptance point":"TST_APFlag",
+                "Temperature_C":"TST_TempDemand",
+                "Gas_Type":"TST_GasType",
+                "Test_Mode":"TST_TestMode",
+                "Measurement":"TST_MeasurementReq",
+                "Torque_Check":"TST_TorqueCheck"
+
+            }
+
+        }
+
+    return None
+
+
+# =====================================================
+# CONVERSION
+# =====================================================
+
+def convert_machine_to_technician(df,file_type):
+
+    mapping = get_column_mapping(file_type)
+
+    tech_df = df.rename(columns=mapping["machine_to_technician"])
+
+    tech_df.insert(0,"Step",range(1,len(tech_df)+1))
+
+    if "Notes" not in tech_df.columns:
+        tech_df["Notes"] = ""
+
+    return tech_df
+
+
+# =====================================================
+# EXCEL EXPORT
+# =====================================================
+
+def create_professional_excel_from_data(df,file_type,spec_name=""):
+
+    df = df.replace({np.nan:""})
+
+    output = io.BytesIO()
+
+    logo_path = os.path.join(os.path.dirname(__file__),"company_logo.png")
+
+    with pd.ExcelWriter(output,engine="xlsxwriter") as writer:
+
+        df.to_excel(writer,sheet_name="TEST_SEQUENCE",index=False)
+
+        wb = writer.book
+        ws = writer.sheets["TEST_SEQUENCE"]
+
+        header = wb.add_format({
+            "bold":True,
+            "align":"center",
+            "border":1,
+            "fg_color":"#366092",
+            "font_color":"white"
+        })
+
+        cell = wb.add_format({"border":1,"align":"center"})
+        notes = wb.add_format({"border":1,"align":"left"})
+
+        for c,col in enumerate(df.columns):
+            ws.write(0,c,col,header)
+
+        for r in range(1,len(df)+1):
+
+            for c,col in enumerate(df.columns):
+
+                val = df.iloc[r-1,c]
+
+                if pd.isna(val):
+                    val = ""
+
+                if col == "Notes":
+                    ws.write(r,c,str(val),notes)
                 else:
-                    primary = to_float(primary_cell)
+                    ws.write(r,c,val,cell)
 
-                if primary is None:
-                    primary = 0
+        ws.set_column(0,len(df.columns)-1,18)
 
-                speed = to_float(safe_get(row, speed_col))
+        instr = wb.add_worksheet("INSTRUCTIONS")
 
-                if speed is None:
-                    speed = 0
+        if os.path.exists(logo_path):
 
-                temp = safe_get(row, temp_col)
+            instr.set_row(0,120)
 
-                if isinstance(temp, str) and temp.upper() == "AMB":
-                    temp = 60
+            instr.insert_image(
+                "A1",
+                logo_path,
+                {"x_scale":0.6,"y_scale":0.6}
+            )
 
-                hold_val = to_float(safe_get(row, hold_col))
+        instr.write(12,1,"SEAL TEST SEQUENCE")
 
-                if hold_val is None or pd.isna(hold_val):
-                    duration = 0
-                else:
-                    duration = int(hold_val * 60)
+        if spec_name:
+            instr.write(13,1,f"Source Spec: {spec_name}")
 
-                remarks = safe_get(row, remarks_col)
+        instr.write(15,1,"1. Edit sequence as required")
+        instr.write(16,1,"2. Maintain safe pressure relationships")
+        instr.write(17,1,"3. Upload file back to system")
 
-                acceptance = 1 if isinstance(remarks, str) and remarks.strip() != "" else 0
+    output.seek(0)
 
-                interspace = 0
-                bp_de = 0
-                bp_nde = 0
+    return output
 
-                if test_mode == 1:
-                    bp_de = secondary
-                    bp_nde = secondary
-                else:
-                    interspace = secondary
 
-                rows.append({
+# =====================================================
+# EDITABLE TABLE
+# =====================================================
 
-                    "Step": step,
-                    "Speed_RPM": speed,
-                    "Primary seal Gas Pressure (barg)": primary,
-                    "Interspace_Pressure_bar": interspace,
-                    "BackPressure_Drive_End_bar": bp_de,
-                    "BackPressure_Non_Drive_End_bar": bp_nde,
-                    "Gas_Injection_bar": 0,
-                    "Duration_s": duration,
-                    "Acceptance point": acceptance,
-                    "Temperature_C": temp,
-                    "Gas_Type": "Air",
-                    "Test_Mode": test_mode,
-                    "Measurement": 1,
-                    "Torque_Check": 0,
-                    "Notes": remarks if remarks else ""
+def editable_dataframe(df):
 
-                })
+    edited = st.data_editor(df,use_container_width=True)
 
-    df = pd.DataFrame(rows)
+    warnings = validate_safety(edited)
 
-    if not df.empty:
+    if warnings:
 
-        df = df.sort_values("Step")
+        st.error("Safety interlock violations detected")
 
-        df = df.drop_duplicates(subset=["Step"], keep="first")
+        for w in warnings:
+            st.warning(w)
 
-        df = df.reset_index(drop=True)
+    return edited
 
-    return df
+
+# =====================================================
+# MAIN APP
+# =====================================================
+
+def main():
+
+    st.title("⚙️ Seal Test Manager")
+
+    operation = st.sidebar.radio(
+
+        "Operation",
+
+        [
+            "Spec → Technician Excel"
+        ]
+
+    )
+
+    if operation=="Spec → Technician Excel":
+
+        uploaded = st.file_uploader(
+            "Upload Spec",
+            type=["xlsb","xlsm","xlsx"]
+        )
+
+        if uploaded:
+
+            spec_df = scan_spec(uploaded)
+
+            edited = editable_dataframe(spec_df)
+
+            excel = create_professional_excel_from_data(
+                edited,
+                "main_seal",
+                uploaded.name
+            )
+
+            st.download_button(
+                "Download Technician Excel",
+                excel.getvalue(),
+                file_name="technician_sequence.xlsx"
+            )
+
+
+if __name__=="__main__":
+    main()
