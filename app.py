@@ -288,7 +288,7 @@ def editable_dataframe(df):
 
     edited = st.data_editor(df,use_container_width=True)
 
-   warnings = validate_sequence(edited)
+    warnings = validate_safety(edited)
 
     if warnings:
 
