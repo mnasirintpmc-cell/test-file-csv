@@ -73,16 +73,8 @@ def scan_spec(file):
 
                 cell = str(df.iloc[i, j]).strip().lower()
 
+                # Only detect table by "test step"
                 if cell != "test step":
-                    continue
-
-                col_primary = str(df.iloc[i, j+1]).lower() if j+1 < len(df.columns) else ""
-                col_secondary = str(df.iloc[i, j+2]).lower() if j+2 < len(df.columns) else ""
-
-                if (
-                    "primary seal gas pressure" not in col_primary
-                    or "secondary seal gas pressure" not in col_secondary
-                ):
                     continue
 
                 step_col = j
@@ -98,8 +90,10 @@ def scan_spec(file):
 
                     step_text = str(step_val).strip().lower()
 
-                    # STOP if table finished
-                    if step_text == "" or "end of" in step_text:
+                    if step_text == "":
+                        break
+
+                    if "end of" in step_text:
                         break
 
                     try:
@@ -168,6 +162,8 @@ def scan_spec(file):
                         "Notes": remarks if remarks else ""
 
                     })
+
+                break
 
     df = pd.DataFrame(rows)
 
