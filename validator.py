@@ -1,55 +1,63 @@
+import pandas as pd
+
+
+def safe_float(v):
+
+    if pd.isna(v):
+        return 0
+
+    try:
+        return float(v)
+    except:
+        return 0
+
+
 def validate_sequence(df):
 
     warnings = []
 
-    for i, row in df.iterrows():
+    for _, row in df.iterrows():
 
         step = row.get("Step")
 
-        try:
-            primary = float(row["Primary seal Gas Pressure (barg)"])
-        except:
-            continue
-
-        # read all possible secondary pressures
-        try:
-            inter = float(row.get("Interspace_Pressure_bar",0))
-        except:
-            inter = 0
-
-        try:
-            bp_de = float(row.get("BackPressure_Drive_End_bar",0))
-        except:
-            bp_de = 0
-
-        try:
-            bp_nde = float(row.get("BackPressure_Non_Drive_End_bar",0))
-        except:
-            bp_nde = 0
-
-        # find the active secondary pressure
-        secondary = max(inter, bp_de, bp_nde)
+        primary = safe_float(row.get("Primary seal Gas Pressure (barg)"))
+        inter = safe_float(row.get("Interspace_Pressure_bar"))
+        bp_de = safe_float(row.get("BackPressure_Drive_End_bar"))
+        bp_nde = safe_float(row.get("BackPressure_Non_Drive_End_bar"))
 
         # --------------------------------
-        # Rule 1: secondary must be lower
+        # Direct pressure safety checks
         # --------------------------------
 
-        if secondary > primary:
-
+        if inter > primary:
             warnings.append(
-                f"Step {step}: Secondary pressure greater than primary"
+                f"Step {step}: Interspace pressure ({inter}) greater than primary ({primary})"
+            )
+
+        if bp_de > primary:
+            warnings.append(
+                f"Step {step}: BP Drive End ({bp_de}) greater than primary ({primary})"
+            )
+
+        if bp_nde > primary:
+            warnings.append(
+                f"Step {step}: BP Non-Drive End ({bp_nde}) greater than primary ({primary})"
             )
 
         # --------------------------------
-        # Rule 2: ΔP minimum requirement
+        # Differential pressure check
         # --------------------------------
+
+        secondary = max(inter, bp_de, bp_nde)
 
         if secondary > 0:
 
-            if primary - secondary < 0.2:
+            delta_p = primary - secondary
+
+            if delta_p < 0.2:
 
                 warnings.append(
-                    f"Step {step}: ΔP < 0.2 bar"
+                    f"Step {step}: ΔP < 0.2 bar (Primary {primary} / Secondary {secondary})"
                 )
 
     return warnings
