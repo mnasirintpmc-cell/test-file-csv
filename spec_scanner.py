@@ -68,12 +68,7 @@ def scan_spec(file):
         if "secondary" in name_lower:
             test_mode = 2
 
-        table_processed = False
-
         for i in range(len(df)):
-
-            if table_processed:
-                break
 
             for j in range(len(df.columns)):
 
@@ -92,7 +87,6 @@ def scan_spec(file):
                     continue
 
                 step_col = j
-                table_processed = True
 
                 for k in range(i+1, len(df)):
 
@@ -100,18 +94,21 @@ def scan_spec(file):
 
                     step_val = safe_get(row, step_col)
 
-                    if step_val is None or str(step_val).strip() == "":
+                    if step_val is None:
                         break
 
-                    step_text = str(step_val).strip().lower()
+                    step_text = str(step_val).strip()
 
-                    if "end of" in step_text:
+                    if step_text == "":
+                        break
+
+                    if "end of" in step_text.lower():
                         break
 
                     try:
                         step = int(float(step_val))
                     except:
-                        continue
+                        break
 
                     primary_cell = safe_get(row, step_col+1)
                     secondary = to_float(safe_get(row, step_col+2))
@@ -137,10 +134,7 @@ def scan_spec(file):
                     if isinstance(temp, str) and temp.upper() == "AMB":
                         temp = 60
 
-                    if hold_val is None or pd.isna(hold_val):
-                        duration = 0
-                    else:
-                        duration = int(float(hold_val) * 60)
+                    duration = int(hold_val * 60) if hold_val is not None else 0
 
                     acceptance = 1 if isinstance(remarks, str) and remarks.strip() != "" else 0
 
@@ -179,6 +173,8 @@ def scan_spec(file):
                         "Notes": remarks if remarks else ""
 
                     })
+
+                break
 
     df = pd.DataFrame(rows)
 
