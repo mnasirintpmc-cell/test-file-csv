@@ -1,4 +1,5 @@
 
+
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -440,7 +441,10 @@ def main():
 
     elif operation=="Spec → Technician Excel":
 
-        uploaded = st.file_uploader("Upload Spec (.xlsb)",type=["xlsb"])
+        uploaded = st.file_uploader(
+            "Upload Spec (.xlsb, .xlsm, .xlsx)",
+            type=["xlsb","xlsm","xlsx"]
+        )
 
         if uploaded:
 
