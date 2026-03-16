@@ -68,7 +68,12 @@ def scan_spec(file):
         if "secondary" in name_lower:
             test_mode = 2
 
+        table_found = False
+
         for i in range(len(df)):
+
+            if table_found:
+                break
 
             for j in range(len(df.columns)):
 
@@ -97,7 +102,9 @@ def scan_spec(file):
                     if step_val is None:
                         continue
 
-                    if "end of" in str(step_val).lower():
+                    step_text = str(step_val).lower()
+
+                    if "end of" in step_text:
                         break
 
                     try:
@@ -109,7 +116,6 @@ def scan_spec(file):
                     secondary = to_float(safe_get(row, step_col+2))
                     speed = to_float(safe_get(row, step_col+3))
                     temp = safe_get(row, step_col+4)
-
                     hold = safe_get(row, step_col+5)
                     remarks = safe_get(row, step_col+8)
 
@@ -127,7 +133,6 @@ def scan_spec(file):
                     if isinstance(temp, str) and temp.upper() == "AMB":
                         temp = 60
 
-                    # SAFE duration calculation
                     hold_val = to_float(hold)
 
                     if hold_val is None or pd.isna(hold_val):
@@ -172,6 +177,9 @@ def scan_spec(file):
                         "Notes": remarks if remarks else ""
 
                     })
+
+                table_found = True
+                break
 
     df = pd.DataFrame(rows)
 
