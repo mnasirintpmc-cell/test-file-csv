@@ -1,15 +1,9 @@
-
 import pandas as pd
 
 try:
     import pyxlsb
 except ImportError:
     raise ImportError("Install pyxlsb: pip install pyxlsb")
-
-try:
-    import openpyxl
-except ImportError:
-    raise ImportError("Install openpyxl: pip install openpyxl")
 
 
 def safe_get(row, idx):
@@ -25,44 +19,14 @@ def to_float(v):
         return None
 
 
-def _detect_engine(file):
-
-    name = ""
-
-    if hasattr(file, "name"):
-        name = file.name.lower()
-
-    elif isinstance(file, str):
-        name = file.lower()
-
-    if name.endswith(".xlsb"):
-        return "pyxlsb"
-
-    if name.endswith(".xlsx") or name.endswith(".xlsm"):
-        return "openpyxl"
-
-    return "openpyxl"
-
-
 def scan_spec(file):
 
-    engine = _detect_engine(file)
-
-    if engine == "openpyxl":
-        sheets = pd.read_excel(
-            file,
-            engine=engine,
-            sheet_name=None,
-            header=None,
-            engine_kwargs={"data_only": True}
-        )
-    else:
-        sheets = pd.read_excel(
-            file,
-            engine=engine,
-            sheet_name=None,
-            header=None
-        )
+    sheets = pd.read_excel(
+        file,
+        engine="pyxlsb",
+        sheet_name=None,
+        header=None
+    )
 
     rows = []
 
@@ -70,13 +34,6 @@ def scan_spec(file):
 
         if df is None or df.empty:
             continue
-
-        df = df.replace({
-            "Test Point": "Test Step",
-            "Inboard Seal Pressure": "Primary seal Gas Pressure",
-            "Outboard Seal Pressure": "Secondary seal Gas Pressure",
-            "Process Side Gas Pressure": "Secondary seal Gas Pressure"
-        })
 
         name_lower = sheet_name.lower()
 
@@ -97,11 +54,11 @@ def scan_spec(file):
                 col_secondary = str(df.iloc[i, j+2]).lower() if j+2 < len(df.columns) else ""
 
                 if (
-    "primary seal" not in col_primary
-    or "secondary seal" not in col_secondary
-):
-    continue
-    
+                    "primary seal gas pressure" not in col_primary
+                    or "secondary seal gas pressure" not in col_secondary
+                ):
+                    continue
+
                 step_col = j
 
                 for k in range(i+1, len(df)):
@@ -123,19 +80,12 @@ def scan_spec(file):
 
                     primary_cell = safe_get(row, step_col+1)
                     secondary = to_float(safe_get(row, step_col+2))
-
-                    # fallback for API-style tables with % and Bar g columns
-                    if primary_cell is None or primary_cell == "":
-                        primary_cell = safe_get(row, step_col+2)
-
-                    if secondary is None:
-                        secondary = to_float(safe_get(row, step_col+4))
-
                     speed = to_float(safe_get(row, step_col+3))
                     temp = safe_get(row, step_col+4)
                     hold = to_float(safe_get(row, step_col+5))
                     remarks = safe_get(row, step_col+8)
 
+                    # PRIMARY PRESSURE RULE
                     primary = None
 
                     if isinstance(primary_cell, str) and "secondary" in primary_cell.lower():
@@ -147,6 +97,7 @@ def scan_spec(file):
                     if primary is None and secondary is not None:
                         primary = secondary + 5
 
+                    # AMB TEMPERATURE
                     if isinstance(temp, str) and temp.upper() == "AMB":
                         temp = 60
 
@@ -158,6 +109,7 @@ def scan_spec(file):
                     bp_de = 0
                     bp_nde = 0
 
+                    # PRESSURE ROUTING
                     if test_mode == 1:
 
                         interspace = 0
@@ -192,7 +144,6 @@ def scan_spec(file):
 
     df = pd.DataFrame(rows)
 
-    if not df.empty:
-        df = df.sort_values("Step").reset_index(drop=True)
+    df = df.sort_values("Step").reset_index(drop=True)
 
     return df
