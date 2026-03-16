@@ -25,12 +25,10 @@ def to_float(v):
 
 
 def _detect_engine(file):
-
     name = ""
 
     if hasattr(file, "name"):
         name = file.name.lower()
-
     elif isinstance(file, str):
         name = file.lower()
 
@@ -98,15 +96,24 @@ def scan_spec(file):
                     if step_val is None:
                         continue
 
-                    if "end of" in str(step_val).lower():
+                    step_text = str(step_val).strip()
+
+                    # Stop at table end
+                    if "end of" in step_text.lower():
                         break
 
-                    try:
-                        step = int(float(step_val))
-                    except:
+                    # Skip comment rows where step cell is blank
+                    if step_text == "":
                         continue
 
-                    # prevent duplicated steps
+                    step_num = to_float(step_text)
+
+                    if step_num is None:
+                        continue
+
+                    step = int(step_num)
+
+                    # Prevent duplicated rows (pandas forward-fill / merged cells)
                     if step == last_step:
                         continue
 
@@ -116,7 +123,7 @@ def scan_spec(file):
                     secondary_cell = safe_get(row, step_col+2)
 
                     secondary = to_float(secondary_cell)
-                    if secondary is None or pd.isna(secondary):
+                    if secondary is None:
                         secondary = 0
 
                     if isinstance(primary_cell, str) and "secondary" in primary_cell.lower():
@@ -124,11 +131,11 @@ def scan_spec(file):
                     else:
                         primary = to_float(primary_cell)
 
-                    if primary is None or pd.isna(primary):
+                    if primary is None:
                         primary = 0
 
                     speed = to_float(safe_get(row, step_col+3))
-                    if speed is None or pd.isna(speed):
+                    if speed is None:
                         speed = 0
 
                     temp = safe_get(row, step_col+4)
@@ -138,10 +145,10 @@ def scan_spec(file):
 
                     hold = to_float(safe_get(row, step_col+5))
 
-                    if hold is None or pd.isna(hold):
+                    if hold is None:
                         duration = 0
                     else:
-                        duration = int(float(hold) * 60)
+                        duration = int(hold * 60)
 
                     remarks = safe_get(row, step_col+8)
 
@@ -152,13 +159,10 @@ def scan_spec(file):
                     bp_nde = 0
 
                     if test_mode == 1:
-
                         interspace = 0
                         bp_de = secondary
                         bp_nde = secondary
-
                     else:
-
                         interspace = secondary
                         bp_de = 0
                         bp_nde = 0
