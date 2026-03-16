@@ -100,7 +100,6 @@ def scan_spec(file):
 
                     step_val = safe_get(row, step_col)
 
-                    # stop when table ends
                     if step_val is None or str(step_val).strip() == "":
                         break
 
@@ -138,7 +137,10 @@ def scan_spec(file):
                     if isinstance(temp, str) and temp.upper() == "AMB":
                         temp = 60
 
-                    duration = int(hold_val * 60) if hold_val is not None else 0
+                    if hold_val is None or pd.isna(hold_val):
+                        duration = 0
+                    else:
+                        duration = int(float(hold_val) * 60)
 
                     acceptance = 1 if isinstance(remarks, str) and remarks.strip() != "" else 0
 
