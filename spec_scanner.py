@@ -25,10 +25,12 @@ def to_float(v):
 
 
 def _detect_engine(file):
+
     name = ""
 
     if hasattr(file, "name"):
         name = file.name.lower()
+
     elif isinstance(file, str):
         name = file.lower()
 
@@ -104,10 +106,14 @@ def scan_spec(file):
 
                     step_num = to_float(step_text)
 
-                    if step_num is None:
+                    # prevent invalid numeric conversion
+                    if step_num is None or pd.isna(step_num):
                         continue
 
-                    step = int(step_num)
+                    try:
+                        step = int(step_num)
+                    except:
+                        continue
 
                     primary_cell = safe_get(row, step_col+1)
                     secondary_cell = safe_get(row, step_col+2)
@@ -135,10 +141,10 @@ def scan_spec(file):
 
                     hold = to_float(safe_get(row, step_col+5))
 
-                    if hold is None:
+                    if hold is None or pd.isna(hold):
                         duration = 0
                     else:
-                        duration = int(hold * 60)
+                        duration = int(float(hold) * 60)
 
                     remarks = safe_get(row, step_col+8)
 
@@ -182,7 +188,7 @@ def scan_spec(file):
     if not df.empty:
         df = df.sort_values("Step")
 
-        # Remove duplicated steps caused by Excel formatting rows
+        # remove duplicated steps (tandem specs often contain comment rows)
         df = df.drop_duplicates(subset=["Step"], keep="first")
 
         df = df.reset_index(drop=True)
