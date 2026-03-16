@@ -100,7 +100,6 @@ def scan_spec(file):
                     continue
 
                 step_col = j
-
                 table_found = True
 
                 for k in range(i+1, len(df)):
@@ -109,8 +108,9 @@ def scan_spec(file):
 
                     step_val = safe_get(row, step_col)
 
-                    if step_val is None:
-                        continue
+                    # STOP when table ends
+                    if step_val is None or str(step_val).strip() == "":
+                        break
 
                     if "end of" in str(step_val).lower():
                         break
