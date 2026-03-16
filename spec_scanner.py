@@ -113,7 +113,8 @@ def scan_spec(file):
                     secondary = to_float(safe_get(row, step_col+2))
                     speed = to_float(safe_get(row, step_col+3))
                     temp = safe_get(row, step_col+4)
-                    hold = to_float(safe_get(row, step_col+5))
+                   hold_val = to_float(safe_get(row, step_col+5))
+                   duration = int(hold_val * 60) if hold_val is not None else 0
                     remarks = safe_get(row, step_col+8)
 
                     primary = None
