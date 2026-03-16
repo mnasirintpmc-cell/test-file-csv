@@ -106,7 +106,7 @@ def scan_spec(file):
                     except:
                         continue
 
-                    # Prevent duplicated step rows
+                    # prevent duplicated steps
                     if step == last_step:
                         continue
 
@@ -116,7 +116,7 @@ def scan_spec(file):
                     secondary_cell = safe_get(row, step_col+2)
 
                     secondary = to_float(secondary_cell)
-                    if secondary is None:
+                    if secondary is None or pd.isna(secondary):
                         secondary = 0
 
                     if isinstance(primary_cell, str) and "secondary" in primary_cell.lower():
@@ -124,11 +124,11 @@ def scan_spec(file):
                     else:
                         primary = to_float(primary_cell)
 
-                    if primary is None:
+                    if primary is None or pd.isna(primary):
                         primary = 0
 
                     speed = to_float(safe_get(row, step_col+3))
-                    if speed is None:
+                    if speed is None or pd.isna(speed):
                         speed = 0
 
                     temp = safe_get(row, step_col+4)
@@ -136,14 +136,12 @@ def scan_spec(file):
                     if isinstance(temp, str) and temp.upper() == "AMB":
                         temp = 60
 
-                    hold = safe_get(row, step_col+5)
+                    hold = to_float(safe_get(row, step_col+5))
 
-                    hold_val = to_float(hold)
-
-                    if hold_val is None or pd.isna(hold_val):
+                    if hold is None or pd.isna(hold):
                         duration = 0
                     else:
-                        duration = int(float(hold_val) * 60)
+                        duration = int(float(hold) * 60)
 
                     remarks = safe_get(row, step_col+8)
 
