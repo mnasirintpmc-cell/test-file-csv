@@ -65,8 +65,6 @@ def scan_spec(file):
         if "secondary" in name_lower:
             test_mode = 2
 
-        last_step = None
-
         for i in range(len(df)):
 
             for j in range(len(df.columns)):
@@ -98,11 +96,9 @@ def scan_spec(file):
 
                     step_text = str(step_val).strip()
 
-                    # Stop at table end
                     if "end of" in step_text.lower():
                         break
 
-                    # Skip comment rows where step cell is blank
                     if step_text == "":
                         continue
 
@@ -112,12 +108,6 @@ def scan_spec(file):
                         continue
 
                     step = int(step_num)
-
-                    # Prevent duplicated rows (pandas forward-fill / merged cells)
-                    if step == last_step:
-                        continue
-
-                    last_step = step
 
                     primary_cell = safe_get(row, step_col+1)
                     secondary_cell = safe_get(row, step_col+2)
@@ -190,6 +180,11 @@ def scan_spec(file):
     df = pd.DataFrame(rows)
 
     if not df.empty:
-        df = df.sort_values("Step").reset_index(drop=True)
+        df = df.sort_values("Step")
+
+        # Remove duplicated steps caused by Excel formatting rows
+        df = df.drop_duplicates(subset=["Step"], keep="first")
+
+        df = df.reset_index(drop=True)
 
     return df
