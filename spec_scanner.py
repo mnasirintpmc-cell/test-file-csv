@@ -1,5 +1,4 @@
 import pandas as pd
-import os
 
 try:
     import pyxlsb
@@ -27,18 +26,18 @@ def to_float(v):
 
 def _detect_engine(file):
 
-    filename = ""
+    name = ""
 
-    if isinstance(file, str):
-        filename = file.lower()
+    if hasattr(file, "name"):
+        name = file.name.lower()
 
-    elif hasattr(file, "name"):
-        filename = file.name.lower()
+    elif isinstance(file, str):
+        name = file.lower()
 
-    if filename.endswith(".xlsb"):
+    if name.endswith(".xlsb"):
         return "pyxlsb"
 
-    if filename.endswith(".xlsx") or filename.endswith(".xlsm"):
+    if name.endswith(".xlsx") or name.endswith(".xlsm"):
         return "openpyxl"
 
     return "openpyxl"
@@ -97,12 +96,10 @@ def scan_spec(file):
                     if step_val is None:
                         break
 
-                    step_text = str(step_val).strip()
+                    step_text = str(step_val).strip().lower()
 
-                    if step_text == "":
-                        break
-
-                    if "end of" in step_text.lower():
+                    # STOP if table finished
+                    if step_text == "" or "end of" in step_text:
                         break
 
                     try:
@@ -115,9 +112,7 @@ def scan_spec(file):
                     speed = to_float(safe_get(row, step_col+3))
                     temp = safe_get(row, step_col+4)
 
-                    hold_cell = safe_get(row, step_col+5)
-                    hold_val = to_float(hold_cell)
-
+                    hold = to_float(safe_get(row, step_col+5))
                     remarks = safe_get(row, step_col+8)
 
                     primary = None
@@ -134,7 +129,7 @@ def scan_spec(file):
                     if isinstance(temp, str) and temp.upper() == "AMB":
                         temp = 60
 
-                    duration = int(hold_val * 60) if hold_val is not None else 0
+                    duration = int(hold * 60) if hold is not None else 0
 
                     acceptance = 1 if isinstance(remarks, str) and remarks.strip() != "" else 0
 
@@ -173,8 +168,6 @@ def scan_spec(file):
                         "Notes": remarks if remarks else ""
 
                     })
-
-                break
 
     df = pd.DataFrame(rows)
 
