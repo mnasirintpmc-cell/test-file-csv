@@ -1,4 +1,5 @@
 import pandas as pd
+import os
 
 try:
     import pyxlsb
@@ -12,8 +13,6 @@ except ImportError:
 
 
 def safe_get(row, idx):
-    if idx is None:
-        return None
     if idx < len(row):
         return row[idx]
     return None
@@ -32,6 +31,7 @@ def _detect_engine(file):
 
     if isinstance(file, str):
         filename = file.lower()
+
     elif hasattr(file, "name"):
         filename = file.name.lower()
 
@@ -42,17 +42,6 @@ def _detect_engine(file):
         return "openpyxl"
 
     return "openpyxl"
-
-
-def find_column(header, keywords):
-
-    for idx, col in enumerate(header):
-        text = str(col).lower()
-        for k in keywords:
-            if k in text:
-                return idx
-
-    return None
 
 
 def scan_spec(file):
@@ -79,124 +68,116 @@ def scan_spec(file):
         if "secondary" in name_lower:
             test_mode = 2
 
-        header_row = None
-
-        # find first header row only
         for i in range(len(df)):
-            row_text = str(df.iloc[i,0]).lower()
 
-            if "test step" in row_text or "test point" in row_text:
-                header_row = i
-                break
+            for j in range(len(df.columns)):
 
-        if header_row is None:
-            continue
+                cell = str(df.iloc[i, j]).strip().lower()
 
-        header = [str(x).lower() for x in df.iloc[header_row].tolist()]
+                # accept both header variants
+                if cell != "test step" and cell != "test point":
+                    continue
 
-        step_col = find_column(header, ["test step","test point"])
+                col_primary = str(df.iloc[i, j+1]).lower() if j+1 < len(df.columns) else ""
+                col_secondary = str(df.iloc[i, j+2]).lower() if j+2 < len(df.columns) else ""
 
-        primary_col = find_column(header, [
-            "primary seal",
-            "inboard seal"
-        ])
+                # support vendor pressure naming
+                primary_ok = (
+                    "primary seal gas pressure" in col_primary
+                    or "inboard seal pressure" in col_primary
+                )
 
-        secondary_col = find_column(header, [
-            "secondary seal",
-            "outboard seal",
-            "process side"
-        ])
+                secondary_ok = (
+                    "secondary seal gas pressure" in col_secondary
+                    or "outboard seal pressure" in col_secondary
+                    or "process side gas pressure" in col_secondary
+                )
 
-        speed_col = find_column(header, ["speed"])
-        temp_col = find_column(header, ["temp"])
-        hold_col = find_column(header, ["hold"])
-        remarks_col = find_column(header, ["remark","comment"])
+                if not primary_ok or not secondary_ok:
+                    continue
 
-        if step_col is None:
-            continue
+                step_col = j
 
-        # read table rows
-        for k in range(header_row+1, len(df)):
+                for k in range(i+1, len(df)):
 
-            row = df.iloc[k].tolist()
+                    row = df.iloc[k].tolist()
 
-            step_val = safe_get(row, step_col)
+                    step_val = safe_get(row, step_col)
 
-            # stop table when step column becomes empty
-            if step_val is None or str(step_val).strip() == "":
-                break
+                    if step_val is None:
+                        continue
 
-            if "end of" in str(step_val).lower():
-                break
+                    if "end of" in str(step_val).lower():
+                        break
 
-            try:
-                step = int(float(step_val))
-            except:
-                continue
+                    try:
+                        step = int(float(step_val))
+                    except:
+                        continue
 
-            primary_cell = safe_get(row, primary_col)
-            secondary = to_float(safe_get(row, secondary_col))
-            speed = to_float(safe_get(row, speed_col))
-            temp = safe_get(row, temp_col)
-            hold = to_float(safe_get(row, hold_col))
-            remarks = safe_get(row, remarks_col)
+                    primary_cell = safe_get(row, step_col+1)
+                    secondary = to_float(safe_get(row, step_col+2))
+                    speed = to_float(safe_get(row, step_col+3))
+                    temp = safe_get(row, step_col+4)
+                    hold = to_float(safe_get(row, step_col+5))
+                    remarks = safe_get(row, step_col+8)
 
-            primary = None
+                    primary = None
 
-            if isinstance(primary_cell, str) and "secondary" in primary_cell.lower():
-                if secondary is not None:
-                    primary = secondary + 5
-            else:
-                primary = to_float(primary_cell)
+                    if isinstance(primary_cell, str) and "secondary" in primary_cell.lower():
+                        if secondary is not None:
+                            primary = secondary + 5
+                    else:
+                        primary = to_float(primary_cell)
 
-            if primary is None and secondary is not None:
-                primary = secondary + 5
+                    if primary is None and secondary is not None:
+                        primary = secondary + 5
 
-            if isinstance(temp, str) and temp.upper() == "AMB":
-                temp = 60
+                    if isinstance(temp, str) and temp.upper() == "AMB":
+                        temp = 60
 
-            try:
-                duration = int(float(hold) * 60)
-            except:
-                duration = 0
+                    try:
+                        duration = int(float(hold) * 60)
+                    except:
+                        duration = 0
 
-            acceptance = 1 if isinstance(remarks, str) and remarks.strip() != "" else 0
+                    acceptance = 1 if isinstance(remarks, str) and remarks.strip() != "" else 0
 
-            interspace = 0
-            bp_de = 0
-            bp_nde = 0
+                    interspace = 0
+                    bp_de = 0
+                    bp_nde = 0
 
-            if test_mode == 1:
+                    if test_mode == 1:
 
-                interspace = 0
-                bp_de = secondary
-                bp_nde = secondary
+                        interspace = 0
+                        bp_de = secondary
+                        bp_nde = secondary
 
-            else:
+                    else:
 
-                interspace = secondary
-                bp_de = 0
-                bp_nde = 0
+                        interspace = secondary
+                        bp_de = 0
+                        bp_nde = 0
 
-            rows.append({
+                    rows.append({
 
-                "Step": step,
-                "Speed_RPM": speed,
-                "Primary seal Gas Pressure (barg)": primary,
-                "Interspace_Pressure_bar": interspace,
-                "BackPressure_Drive_End_bar": bp_de,
-                "BackPressure_Non_Drive_End_bar": bp_nde,
-                "Gas_Injection_bar": 0,
-                "Duration_s": duration,
-                "Acceptance point": acceptance,
-                "Temperature_C": temp,
-                "Gas_Type": "Air",
-                "Test_Mode": test_mode,
-                "Measurement": 1,
-                "Torque_Check": 0,
-                "Notes": remarks if remarks else ""
+                        "Step": step,
+                        "Speed_RPM": speed,
+                        "Primary seal Gas Pressure (barg)": primary,
+                        "Interspace_Pressure_bar": interspace,
+                        "BackPressure_Drive_End_bar": bp_de,
+                        "BackPressure_Non_Drive_End_bar": bp_nde,
+                        "Gas_Injection_bar": 0,
+                        "Duration_s": duration,
+                        "Acceptance point": acceptance,
+                        "Temperature_C": temp,
+                        "Gas_Type": "Air",
+                        "Test_Mode": test_mode,
+                        "Measurement": 1,
+                        "Torque_Check": 0,
+                        "Notes": remarks if remarks else ""
 
-            })
+                    })
 
     df = pd.DataFrame(rows)
 
