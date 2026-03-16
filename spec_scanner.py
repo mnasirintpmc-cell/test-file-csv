@@ -90,106 +90,112 @@ def scan_spec(file):
         if "secondary" in name_lower:
             test_mode = 2
 
+        header_row = None
+
         for i in range(len(df)):
 
-            header_cell = str(df.iloc[i,0]).lower()
+            row_text = str(df.iloc[i,0]).lower()
 
-            if "test step" not in header_cell and "test point" not in header_cell:
+            if "test step" in row_text or "test point" in row_text:
+                header_row = i
+                break
+
+        if header_row is None:
+            continue
+
+        header = [str(x).lower() for x in df.iloc[header_row].tolist()]
+
+        step_idx = find_col(header, ["test step","test point"])
+        primary_idx = find_col(header, ["primary seal","inboard seal"])
+        secondary_idx = find_col(header, ["secondary seal","outboard seal","process side"])
+        speed_idx = find_col(header, ["speed"])
+        temp_idx = find_col(header, ["temp"])
+        hold_idx = find_col(header, ["hold"])
+        remarks_idx = find_col(header, ["remark","comment"])
+
+        if step_idx is None or primary_idx is None or secondary_idx is None:
+            continue
+
+        for k in range(header_row+1, len(df)):
+
+            row = df.iloc[k].tolist()
+
+            step_val = safe_get(row, step_idx)
+
+            if step_val is None:
                 continue
 
-            header = [str(x).lower() for x in df.iloc[i].tolist()]
+            if "end of" in str(step_val).lower():
+                break
 
-            step_idx = find_col(header, ["test step","test point"])
-            primary_idx = find_col(header, ["primary seal","inboard seal"])
-            secondary_idx = find_col(header, ["secondary seal","outboard seal","process side"])
-            speed_idx = find_col(header, ["speed"])
-            temp_idx = find_col(header, ["temp"])
-            hold_idx = find_col(header, ["hold"])
-            remarks_idx = find_col(header, ["remark","comment"])
-
-            if step_idx is None or primary_idx is None or secondary_idx is None:
+            try:
+                step = int(float(step_val))
+            except:
                 continue
 
-            for k in range(i+1, len(df)):
+            primary_cell = safe_get(row, primary_idx)
+            secondary = to_float(safe_get(row, secondary_idx))
+            speed = to_float(safe_get(row, speed_idx))
+            temp = safe_get(row, temp_idx)
+            hold = to_float(safe_get(row, hold_idx))
+            remarks = safe_get(row, remarks_idx)
 
-                row = df.iloc[k].tolist()
+            primary = None
 
-                step_val = safe_get(row, step_idx)
-
-                if step_val is None:
-                    continue
-
-                if "end of" in str(step_val).lower():
-                    break
-
-                try:
-                    step = int(float(step_val))
-                except:
-                    continue
-
-                primary_cell = safe_get(row, primary_idx)
-                secondary = to_float(safe_get(row, secondary_idx))
-                speed = to_float(safe_get(row, speed_idx))
-                temp = safe_get(row, temp_idx)
-                hold = to_float(safe_get(row, hold_idx))
-                remarks = safe_get(row, remarks_idx)
-
-                primary = None
-
-                if isinstance(primary_cell, str) and "secondary" in primary_cell.lower():
-                    if secondary is not None:
-                        primary = secondary + 5
-                else:
-                    primary = to_float(primary_cell)
-
-                if primary is None and secondary is not None:
+            if isinstance(primary_cell, str) and "secondary" in primary_cell.lower():
+                if secondary is not None:
                     primary = secondary + 5
+            else:
+                primary = to_float(primary_cell)
 
-                if isinstance(temp, str) and temp.upper() == "AMB":
-                    temp = 60
+            if primary is None and secondary is not None:
+                primary = secondary + 5
 
-                try:
-                    duration = int(float(hold) * 60)
-                except:
-                    duration = 0
+            if isinstance(temp, str) and temp.upper() == "AMB":
+                temp = 60
 
-                acceptance = 1 if isinstance(remarks, str) and remarks.strip() != "" else 0
+            try:
+                duration = int(float(hold) * 60)
+            except:
+                duration = 0
+
+            acceptance = 1 if isinstance(remarks, str) and remarks.strip() != "" else 0
+
+            interspace = 0
+            bp_de = 0
+            bp_nde = 0
+
+            if test_mode == 1:
 
                 interspace = 0
+                bp_de = secondary
+                bp_nde = secondary
+
+            else:
+
+                interspace = secondary
                 bp_de = 0
                 bp_nde = 0
 
-                if test_mode == 1:
+            rows.append({
 
-                    interspace = 0
-                    bp_de = secondary
-                    bp_nde = secondary
+                "Step": step,
+                "Speed_RPM": speed,
+                "Primary seal Gas Pressure (barg)": primary,
+                "Interspace_Pressure_bar": interspace,
+                "BackPressure_Drive_End_bar": bp_de,
+                "BackPressure_Non_Drive_End_bar": bp_nde,
+                "Gas_Injection_bar": 0,
+                "Duration_s": duration,
+                "Acceptance point": acceptance,
+                "Temperature_C": temp,
+                "Gas_Type": "Air",
+                "Test_Mode": test_mode,
+                "Measurement": 1,
+                "Torque_Check": 0,
+                "Notes": remarks if remarks else ""
 
-                else:
-
-                    interspace = secondary
-                    bp_de = 0
-                    bp_nde = 0
-
-                rows.append({
-
-                    "Step": step,
-                    "Speed_RPM": speed,
-                    "Primary seal Gas Pressure (barg)": primary,
-                    "Interspace_Pressure_bar": interspace,
-                    "BackPressure_Drive_End_bar": bp_de,
-                    "BackPressure_Non_Drive_End_bar": bp_nde,
-                    "Gas_Injection_bar": 0,
-                    "Duration_s": duration,
-                    "Acceptance point": acceptance,
-                    "Temperature_C": temp,
-                    "Gas_Type": "Air",
-                    "Test_Mode": test_mode,
-                    "Measurement": 1,
-                    "Torque_Check": 0,
-                    "Notes": remarks if remarks else ""
-
-                })
+            })
 
     df = pd.DataFrame(rows)
 
