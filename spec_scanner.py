@@ -1,5 +1,4 @@
 import pandas as pd
-import os
 
 try:
     import pyxlsb
@@ -27,18 +26,18 @@ def to_float(v):
 
 def _detect_engine(file):
 
-    filename = ""
+    name = ""
 
-    if isinstance(file, str):
-        filename = file.lower()
+    if hasattr(file, "name"):
+        name = file.name.lower()
 
-    elif hasattr(file, "name"):
-        filename = file.name.lower()
+    elif isinstance(file, str):
+        name = file.lower()
 
-    if filename.endswith(".xlsb"):
+    if name.endswith(".xlsb"):
         return "pyxlsb"
 
-    if filename.endswith(".xlsx") or filename.endswith(".xlsm"):
+    if name.endswith(".xlsx") or name.endswith(".xlsm"):
         return "openpyxl"
 
     return "openpyxl"
@@ -68,12 +67,9 @@ def scan_spec(file):
         if "secondary" in name_lower:
             test_mode = 2
 
-        table_found = False
+        last_step = None
 
         for i in range(len(df)):
-
-            if table_found:
-                break
 
             for j in range(len(df.columns)):
 
@@ -102,9 +98,7 @@ def scan_spec(file):
                     if step_val is None:
                         continue
 
-                    step_text = str(step_val).lower()
-
-                    if "end of" in step_text:
+                    if "end of" in str(step_val).lower():
                         break
 
                     try:
@@ -112,26 +106,37 @@ def scan_spec(file):
                     except:
                         continue
 
-                    primary_cell = safe_get(row, step_col+1)
-                    secondary = to_float(safe_get(row, step_col+2))
-                    speed = to_float(safe_get(row, step_col+3))
-                    temp = safe_get(row, step_col+4)
-                    hold = safe_get(row, step_col+5)
-                    remarks = safe_get(row, step_col+8)
+                    # Prevent duplicated step rows
+                    if step == last_step:
+                        continue
 
-                    primary = None
+                    last_step = step
+
+                    primary_cell = safe_get(row, step_col+1)
+                    secondary_cell = safe_get(row, step_col+2)
+
+                    secondary = to_float(secondary_cell)
+                    if secondary is None:
+                        secondary = 0
 
                     if isinstance(primary_cell, str) and "secondary" in primary_cell.lower():
-                        if secondary is not None:
-                            primary = secondary + 5
+                        primary = secondary + 5
                     else:
                         primary = to_float(primary_cell)
 
-                    if primary is None and secondary is not None:
-                        primary = secondary + 5
+                    if primary is None:
+                        primary = 0
+
+                    speed = to_float(safe_get(row, step_col+3))
+                    if speed is None:
+                        speed = 0
+
+                    temp = safe_get(row, step_col+4)
 
                     if isinstance(temp, str) and temp.upper() == "AMB":
                         temp = 60
+
+                    hold = safe_get(row, step_col+5)
 
                     hold_val = to_float(hold)
 
@@ -139,6 +144,8 @@ def scan_spec(file):
                         duration = 0
                     else:
                         duration = int(float(hold_val) * 60)
+
+                    remarks = safe_get(row, step_col+8)
 
                     acceptance = 1 if isinstance(remarks, str) and remarks.strip() != "" else 0
 
@@ -177,9 +184,6 @@ def scan_spec(file):
                         "Notes": remarks if remarks else ""
 
                     })
-
-                table_found = True
-                break
 
     df = pd.DataFrame(rows)
 
