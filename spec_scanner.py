@@ -109,6 +109,7 @@ def scan_spec(file):
                     secondary = to_float(safe_get(row, step_col+2))
                     speed = to_float(safe_get(row, step_col+3))
                     temp = safe_get(row, step_col+4)
+
                     hold = safe_get(row, step_col+5)
                     remarks = safe_get(row, step_col+8)
 
@@ -126,8 +127,13 @@ def scan_spec(file):
                     if isinstance(temp, str) and temp.upper() == "AMB":
                         temp = 60
 
+                    # SAFE duration calculation
                     hold_val = to_float(hold)
-                    duration = int(hold_val * 60) if hold_val is not None else 0
+
+                    if hold_val is None or pd.isna(hold_val):
+                        duration = 0
+                    else:
+                        duration = int(float(hold_val) * 60)
 
                     acceptance = 1 if isinstance(remarks, str) and remarks.strip() != "" else 0
 
