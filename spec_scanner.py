@@ -12,6 +12,8 @@ except ImportError:
 
 
 def safe_get(row, idx):
+    if idx is None:
+        return None
     if idx < len(row):
         return row[idx]
     return None
@@ -43,6 +45,17 @@ def _detect_engine(file):
     return "openpyxl"
 
 
+def find_column(header, keyword):
+
+    keyword = keyword.lower()
+
+    for idx, col in enumerate(header):
+        if keyword in str(col).lower():
+            return idx
+
+    return None
+
+
 def scan_spec(file):
 
     engine = _detect_engine(file)
@@ -69,126 +82,121 @@ def scan_spec(file):
 
         for i in range(len(df)):
 
-            for j in range(len(df.columns)):
+            cell = str(df.iloc[i, 0]).lower()
 
-                cell = str(df.iloc[i, j]).strip().lower()
+            if "test step" not in cell:
+                continue
 
-                if cell != "test step":
+            header = df.iloc[i].astype(str).tolist()
+
+            step_col = find_column(header, "test step")
+            primary_col = find_column(header, "primary seal gas pressure")
+            secondary_col = find_column(header, "secondary seal gas pressure")
+            speed_col = find_column(header, "speed")
+            temp_col = find_column(header, "temp")
+            hold_col = find_column(header, "hold")
+            remarks_col = find_column(header, "remark")
+
+            for k in range(i + 1, len(df)):
+
+                row = df.iloc[k].tolist()
+
+                step_val = safe_get(row, step_col)
+
+                if step_val is None:
                     continue
 
-                col_primary = str(df.iloc[i, j+1]).lower() if j+1 < len(df.columns) else ""
-                col_secondary = str(df.iloc[i, j+2]).lower() if j+2 < len(df.columns) else ""
+                step_text = str(step_val).strip()
 
-                if (
-                    "primary seal gas pressure" not in col_primary
-                    or "secondary seal gas pressure" not in col_secondary
-                ):
+                if step_text == "":
                     continue
 
-                step_col = j
+                if "end of" in step_text.lower():
+                    break
 
-                for k in range(i+1, len(df)):
+                step_num = to_float(step_text)
 
-                    row = df.iloc[k].tolist()
+                if step_num is None or pd.isna(step_num):
+                    continue
 
-                    step_val = safe_get(row, step_col)
+                try:
+                    step = int(step_num)
+                except:
+                    continue
 
-                    if step_val is None:
-                        continue
+                primary_cell = safe_get(row, primary_col)
+                secondary_cell = safe_get(row, secondary_col)
 
-                    step_text = str(step_val).strip()
+                secondary = to_float(secondary_cell)
 
-                    if "end of" in step_text.lower():
-                        break
+                if secondary is None:
+                    secondary = 0
 
-                    if step_text == "":
-                        continue
+                if isinstance(primary_cell, str) and "secondary" in primary_cell.lower():
+                    primary = secondary + 5
+                else:
+                    primary = to_float(primary_cell)
 
-                    step_num = to_float(step_text)
+                if primary is None:
+                    primary = 0
 
-                    # prevent invalid numeric conversion
-                    if step_num is None or pd.isna(step_num):
-                        continue
+                speed = to_float(safe_get(row, speed_col))
 
-                    try:
-                        step = int(step_num)
-                    except:
-                        continue
+                if speed is None:
+                    speed = 0
 
-                    primary_cell = safe_get(row, step_col+1)
-                    secondary_cell = safe_get(row, step_col+2)
+                temp = safe_get(row, temp_col)
 
-                    secondary = to_float(secondary_cell)
-                    if secondary is None:
-                        secondary = 0
+                if isinstance(temp, str) and temp.upper() == "AMB":
+                    temp = 60
 
-                    if isinstance(primary_cell, str) and "secondary" in primary_cell.lower():
-                        primary = secondary + 5
-                    else:
-                        primary = to_float(primary_cell)
+                hold_val = to_float(safe_get(row, hold_col))
 
-                    if primary is None:
-                        primary = 0
+                if hold_val is None or pd.isna(hold_val):
+                    duration = 0
+                else:
+                    duration = int(hold_val * 60)
 
-                    speed = to_float(safe_get(row, step_col+3))
-                    if speed is None:
-                        speed = 0
+                remarks = safe_get(row, remarks_col)
 
-                    temp = safe_get(row, step_col+4)
+                acceptance = 1 if isinstance(remarks, str) and remarks.strip() != "" else 0
 
-                    if isinstance(temp, str) and temp.upper() == "AMB":
-                        temp = 60
+                interspace = 0
+                bp_de = 0
+                bp_nde = 0
 
-                    hold = to_float(safe_get(row, step_col+5))
+                if test_mode == 1:
+                    bp_de = secondary
+                    bp_nde = secondary
+                else:
+                    interspace = secondary
 
-                    if hold is None or pd.isna(hold):
-                        duration = 0
-                    else:
-                        duration = int(float(hold) * 60)
+                rows.append({
 
-                    remarks = safe_get(row, step_col+8)
+                    "Step": step,
+                    "Speed_RPM": speed,
+                    "Primary seal Gas Pressure (barg)": primary,
+                    "Interspace_Pressure_bar": interspace,
+                    "BackPressure_Drive_End_bar": bp_de,
+                    "BackPressure_Non_Drive_End_bar": bp_nde,
+                    "Gas_Injection_bar": 0,
+                    "Duration_s": duration,
+                    "Acceptance point": acceptance,
+                    "Temperature_C": temp,
+                    "Gas_Type": "Air",
+                    "Test_Mode": test_mode,
+                    "Measurement": 1,
+                    "Torque_Check": 0,
+                    "Notes": remarks if remarks else ""
 
-                    acceptance = 1 if isinstance(remarks, str) and remarks.strip() != "" else 0
-
-                    interspace = 0
-                    bp_de = 0
-                    bp_nde = 0
-
-                    if test_mode == 1:
-                        interspace = 0
-                        bp_de = secondary
-                        bp_nde = secondary
-                    else:
-                        interspace = secondary
-                        bp_de = 0
-                        bp_nde = 0
-
-                    rows.append({
-
-                        "Step": step,
-                        "Speed_RPM": speed,
-                        "Primary seal Gas Pressure (barg)": primary,
-                        "Interspace_Pressure_bar": interspace,
-                        "BackPressure_Drive_End_bar": bp_de,
-                        "BackPressure_Non_Drive_End_bar": bp_nde,
-                        "Gas_Injection_bar": 0,
-                        "Duration_s": duration,
-                        "Acceptance point": acceptance,
-                        "Temperature_C": temp,
-                        "Gas_Type": "Air",
-                        "Test_Mode": test_mode,
-                        "Measurement": 1,
-                        "Torque_Check": 0,
-                        "Notes": remarks if remarks else ""
-
-                    })
+                })
 
     df = pd.DataFrame(rows)
 
     if not df.empty:
+
         df = df.sort_values("Step")
 
-        # remove duplicated steps (tandem specs often contain comment rows)
         df = df.drop_duplicates(subset=["Step"], keep="first")
 
         df = df.reset_index(drop=True)
