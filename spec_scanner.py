@@ -68,39 +68,25 @@ def scan_spec(file):
         if "secondary" in name_lower:
             test_mode = 2
 
-        table_found = False
-
         for i in range(len(df)):
-
-            if table_found:
-                break
 
             for j in range(len(df.columns)):
 
                 cell = str(df.iloc[i, j]).strip().lower()
 
-                if cell != "test step" and cell != "test point":
+                if cell != "test step":
                     continue
 
                 col_primary = str(df.iloc[i, j+1]).lower() if j+1 < len(df.columns) else ""
                 col_secondary = str(df.iloc[i, j+2]).lower() if j+2 < len(df.columns) else ""
 
-                primary_ok = (
-                    "primary seal gas pressure" in col_primary
-                    or "inboard seal pressure" in col_primary
-                )
-
-                secondary_ok = (
-                    "secondary seal gas pressure" in col_secondary
-                    or "outboard seal pressure" in col_secondary
-                    or "process side gas pressure" in col_secondary
-                )
-
-                if not primary_ok or not secondary_ok:
+                if (
+                    "primary seal gas pressure" not in col_primary
+                    or "secondary seal gas pressure" not in col_secondary
+                ):
                     continue
 
                 step_col = j
-                table_found = True
 
                 for k in range(i+1, len(df)):
 
@@ -108,9 +94,12 @@ def scan_spec(file):
 
                     step_val = safe_get(row, step_col)
 
-                    # STOP when table ends
-                    if step_val is None or str(step_val).strip() == "":
-                        break
+                    if step_val is None:
+                        continue
+
+                    # FIX: skip unit / formula rows
+                    if isinstance(step_val, str) and ("ref" in step_val.lower() or "(" in step_val):
+                        continue
 
                     if "end of" in str(step_val).lower():
                         break
@@ -141,10 +130,7 @@ def scan_spec(file):
                     if isinstance(temp, str) and temp.upper() == "AMB":
                         temp = 60
 
-                    try:
-                        duration = int(float(hold) * 60)
-                    except:
-                        duration = 0
+                    duration = int(hold * 60) if hold is not None else 0
 
                     acceptance = 1 if isinstance(remarks, str) and remarks.strip() != "" else 0
 
@@ -183,8 +169,6 @@ def scan_spec(file):
                         "Notes": remarks if remarks else ""
 
                     })
-
-                break
 
     df = pd.DataFrame(rows)
 
