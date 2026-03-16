@@ -97,11 +97,11 @@ def scan_spec(file):
                 col_secondary = str(df.iloc[i, j+2]).lower() if j+2 < len(df.columns) else ""
 
                 if (
-                    "primary seal gas pressure" not in col_primary
-                    or "secondary seal gas pressure" not in col_secondary
-                ):
-                    continue
-
+    "primary seal" not in col_primary
+    or "secondary seal" not in col_secondary
+):
+    continue
+    
                 step_col = j
 
                 for k in range(i+1, len(df)):
