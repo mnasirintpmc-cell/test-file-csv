@@ -77,8 +77,8 @@ def scan_spec(file):
                 if cell != "test step":
                     continue
 
-                col_primary = str(df.iloc[i, j+1]).lower() if j+1 < len(df.columns) else ""
-                col_secondary = str(df.iloc[i, j+2]).lower() if j+2 < len(df.columns) else ""
+                col_primary = str(df.iloc[i, j + 1]).lower() if j + 1 < len(df.columns) else ""
+                col_secondary = str(df.iloc[i, j + 2]).lower() if j + 2 < len(df.columns) else ""
 
                 if (
                     "primary seal gas pressure" not in col_primary
@@ -88,7 +88,7 @@ def scan_spec(file):
 
                 step_col = j
 
-                for k in range(i+1, len(df)):
+                for k in range(i + 1, len(df)):
 
                     row = df.iloc[k].tolist()
 
@@ -99,7 +99,7 @@ def scan_spec(file):
 
                     step_text = str(step_val).strip().lower()
 
-                    # skip units / formula rows
+                    # skip unit rows
                     if "ref" in step_text or "(" in step_text:
                         continue
 
@@ -111,19 +111,18 @@ def scan_spec(file):
                     except:
                         continue
 
-                    primary_cell = safe_get(row, step_col+1)
-                    secondary = to_float(safe_get(row, step_col+2))
+                    primary_cell = safe_get(row, step_col + 1)
+                    secondary = to_float(safe_get(row, step_col + 2))
 
-                    # SAFE speed read
-                    speed_cell = safe_get(row, step_col+3)
+                    speed_cell = safe_get(row, step_col + 3)
                     speed = to_float(speed_cell)
 
-                    temp = safe_get(row, step_col+4)
+                    temp = safe_get(row, step_col + 4)
 
-                    hold_cell = safe_get(row, step_col+5)
+                    hold_cell = safe_get(row, step_col + 5)
                     hold = to_float(hold_cell)
 
-                    remarks = safe_get(row, step_col+8)
+                    remarks = safe_get(row, step_col + 8)
 
                     primary = None
 
@@ -139,7 +138,6 @@ def scan_spec(file):
                     if isinstance(temp, str) and temp.upper() == "AMB":
                         temp = 60
 
-                    # SAFE duration conversion
                     duration = int(hold * 60) if hold is not None else 0
 
                     acceptance = 1 if isinstance(remarks, str) and remarks.strip() != "" else 0
