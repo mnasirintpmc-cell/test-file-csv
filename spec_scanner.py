@@ -126,7 +126,11 @@ def scan_spec(file):
                     if isinstance(temp, str) and temp.upper() == "AMB":
                         temp = 60
 
-                    duration = int(hold * 60) if hold is not None else 0
+                    # SAFE duration conversion (fix)
+                    try:
+                        duration = int(float(hold) * 60)
+                    except:
+                        duration = 0
 
                     acceptance = 1 if isinstance(remarks, str) and remarks.strip() != "" else 0
 
