@@ -68,7 +68,12 @@ def scan_spec(file):
         if "secondary" in name_lower:
             test_mode = 2
 
+        table_processed = False
+
         for i in range(len(df)):
+
+            if table_processed:
+                break
 
             for j in range(len(df.columns)):
 
@@ -87,6 +92,7 @@ def scan_spec(file):
                     continue
 
                 step_col = j
+                table_processed = True
 
                 for k in range(i+1, len(df)):
 
@@ -94,14 +100,11 @@ def scan_spec(file):
 
                     step_val = safe_get(row, step_col)
 
-                    if step_val is None:
-                        continue
+                    # stop when table ends
+                    if step_val is None or str(step_val).strip() == "":
+                        break
 
                     step_text = str(step_val).strip().lower()
-
-                    # skip unit / formula rows
-                    if "ref" in step_text or "(" in step_text:
-                        continue
 
                     if "end of" in step_text:
                         break
@@ -117,7 +120,7 @@ def scan_spec(file):
                     temp = safe_get(row, step_col+4)
 
                     hold_cell = safe_get(row, step_col+5)
-                    hold = to_float(hold_cell)
+                    hold_val = to_float(hold_cell)
 
                     remarks = safe_get(row, step_col+8)
 
@@ -135,11 +138,7 @@ def scan_spec(file):
                     if isinstance(temp, str) and temp.upper() == "AMB":
                         temp = 60
 
-                    # SAFE duration conversion
-                    if hold is None:
-                        duration = 0
-                    else:
-                        duration = int(hold * 60)
+                    duration = int(hold_val * 60) if hold_val is not None else 0
 
                     acceptance = 1 if isinstance(remarks, str) and remarks.strip() != "" else 0
 
