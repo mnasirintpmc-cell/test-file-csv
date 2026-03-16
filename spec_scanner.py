@@ -1,4 +1,5 @@
 import pandas as pd
+import os
 
 try:
     import pyxlsb
@@ -26,18 +27,18 @@ def to_float(v):
 
 def _detect_engine(file):
 
-    name = ""
+    filename = ""
 
-    if hasattr(file, "name"):
-        name = file.name.lower()
+    if isinstance(file, str):
+        filename = file.lower()
 
-    elif isinstance(file, str):
-        name = file.lower()
+    elif hasattr(file, "name"):
+        filename = file.name.lower()
 
-    if name.endswith(".xlsb"):
+    if filename.endswith(".xlsb"):
         return "pyxlsb"
 
-    if name.endswith(".xlsx") or name.endswith(".xlsm"):
+    if filename.endswith(".xlsx") or filename.endswith(".xlsm"):
         return "openpyxl"
 
     return "openpyxl"
@@ -73,8 +74,16 @@ def scan_spec(file):
 
                 cell = str(df.iloc[i, j]).strip().lower()
 
-                # Only detect table by "test step"
                 if cell != "test step":
+                    continue
+
+                col_primary = str(df.iloc[i, j+1]).lower() if j+1 < len(df.columns) else ""
+                col_secondary = str(df.iloc[i, j+2]).lower() if j+2 < len(df.columns) else ""
+
+                if (
+                    "primary seal gas pressure" not in col_primary
+                    or "secondary seal gas pressure" not in col_secondary
+                ):
                     continue
 
                 step_col = j
@@ -86,27 +95,21 @@ def scan_spec(file):
                     step_val = safe_get(row, step_col)
 
                     if step_val is None:
-                        break
+                        continue
 
-                    step_text = str(step_val).strip().lower()
-
-                    if step_text == "":
-                        break
-
-                    if "end of" in step_text:
+                    if "end of" in str(step_val).lower():
                         break
 
                     try:
                         step = int(float(step_val))
                     except:
-                        break
+                        continue
 
                     primary_cell = safe_get(row, step_col+1)
                     secondary = to_float(safe_get(row, step_col+2))
                     speed = to_float(safe_get(row, step_col+3))
                     temp = safe_get(row, step_col+4)
-
-                    hold = to_float(safe_get(row, step_col+5))
+                    hold = safe_get(row, step_col+5)
                     remarks = safe_get(row, step_col+8)
 
                     primary = None
@@ -123,7 +126,8 @@ def scan_spec(file):
                     if isinstance(temp, str) and temp.upper() == "AMB":
                         temp = 60
 
-                    duration = int(hold * 60) if hold is not None else 0
+                    hold_val = to_float(hold)
+                    duration = int(hold_val * 60) if hold_val is not None else 0
 
                     acceptance = 1 if isinstance(remarks, str) and remarks.strip() != "" else 0
 
@@ -162,8 +166,6 @@ def scan_spec(file):
                         "Notes": remarks if remarks else ""
 
                     })
-
-                break
 
     df = pd.DataFrame(rows)
 
