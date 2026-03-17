@@ -306,7 +306,7 @@ def editable_dataframe(df):
 
 def main():
 
-    st.title("⚙️ DGS Test Manager")
+    st.title("⚙️ Seal Test Manager")
 
     operation = st.sidebar.radio(
 
@@ -315,10 +315,10 @@ def main():
         [
 
             "Download Template",
-            " CSV → Excel",
-            "Excel →  CSV",
+            "Machine CSV → Technician Excel",
+            "Technician Excel → Machine CSV",
             "View Current Test",
-            "Spec → Excel"
+            "Spec → Technician Excel"
 
         ]
 
