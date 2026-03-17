@@ -315,10 +315,10 @@ def main():
         [
 
             "Download Template",
-            " CSV →  Excel",
-            " Excel → CSV",
+            "Machine CSV → Technician Excel",
+            "Technician Excel → Machine CSV",
             "View Current Test",
-            "Spec → Excel"
+            "Spec → Technician Excel"
 
         ]
 
