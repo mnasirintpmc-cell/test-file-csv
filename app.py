@@ -306,7 +306,7 @@ def editable_dataframe(df):
 
 def main():
 
-    st.title("⚙️ Seal Test Manager")
+    st.title("⚙️ DGS Test Manager")
 
     operation = st.sidebar.radio(
 
