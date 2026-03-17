@@ -315,7 +315,7 @@ def main():
         [
 
             "Download Template",
-            "Machine CSV → Technician Excel",
+            "CSV → Excel",
             "Technician Excel → Machine CSV",
             "View Current Test",
             "Spec → Technician Excel"
@@ -356,7 +356,7 @@ def main():
 # MACHINE CSV → TECHNICIAN
 # -----------------------------------------------------
 
-    elif operation=="Machine CSV → Technician Excel":
+    elif operation=="CSV → Excel":
 
         uploaded = st.file_uploader("Upload Machine CSV",type=["csv"])
 
