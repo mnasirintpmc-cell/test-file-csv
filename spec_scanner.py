@@ -163,6 +163,11 @@ def scan_spec(file):
                 
                    if primary == 0:
                        test_mode = 1
+                        else:
+
+                        interspace = secondary
+                        bp_de = 0
+                        bp_nde = 0
                     rows.append({
 
                         "Step": step,
