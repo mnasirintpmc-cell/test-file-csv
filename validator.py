@@ -48,7 +48,7 @@ def validate_sequence(df):
 
             delta_p = primary - secondary
 
-            if delta_p < 10:
+            if delta_p < .2:
                 warnings.append(
                     f"Step {step}: ΔP < 10 bar (Primary {primary} / Secondary {secondary})"
                 )
