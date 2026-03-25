@@ -126,12 +126,12 @@ def scan_spec(file):
 
                     if isinstance(primary_cell, str) and "secondary" in primary_cell.lower():
                         if secondary is not None:
-                            primary = secondary + 5
+                            primary = secondary + 10
                     else:
                         primary = to_float(primary_cell)
 
                     if primary is None and secondary is not None:
-                        primary = secondary + 5
+                        primary = secondary + 10
 
                     if isinstance(temp, str) and temp.upper() == "AMB":
                         temp = 60
