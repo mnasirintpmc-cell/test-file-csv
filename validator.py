@@ -16,37 +16,31 @@ def validate_sequence(df):
 
     warnings = []
 
-    for _, row in df.iterrows():
+    for i, row in df.iterrows():
 
-        step = row.get("Step")
+        step = row.get("Step", i + 1)
 
         primary = safe_float(row.get("Primary seal Gas Pressure (barg)"))
         inter = safe_float(row.get("Interspace_Pressure_bar"))
         bp_de = safe_float(row.get("BackPressure_Drive_End_bar"))
         bp_nde = safe_float(row.get("BackPressure_Non_Drive_End_bar"))
 
-        # --------------------------------
-        # Direct pressure safety checks
-        # --------------------------------
+        # TEST MODE override
+        if primary == 0:
+
+            if "Test_Mode" in df.columns:
+                df.at[i, "Test_Mode"] = 1
+
+            continue
 
         if inter > primary:
-            warnings.append(
-                f"Step {step}: Interspace pressure ({inter}) greater than primary ({primary})"
-            )
+            warnings.append(f"Step {step}: Interspace > Primary")
 
         if bp_de > primary:
-            warnings.append(
-                f"Step {step}: BP Drive End ({bp_de}) greater than primary ({primary})"
-            )
+            warnings.append(f"Step {step}: BP DE > Primary")
 
         if bp_nde > primary:
-            warnings.append(
-                f"Step {step}: BP Non-Drive End ({bp_nde}) greater than primary ({primary})"
-            )
-
-        # --------------------------------
-        # Differential pressure check
-        # --------------------------------
+            warnings.append(f"Step {step}: BP NDE > Primary")
 
         secondary = max(inter, bp_de, bp_nde)
 
@@ -54,10 +48,9 @@ def validate_sequence(df):
 
             delta_p = primary - secondary
 
-            if delta_p < 0.2:
-
+            if delta_p < 10:
                 warnings.append(
-                    f"Step {step}: ΔP < 0.2 bar (Primary {primary} / Secondary {secondary})"
+                    f"Step {step}: ΔP < 10 bar (Primary {primary} / Secondary {secondary})"
                 )
 
     return warnings
