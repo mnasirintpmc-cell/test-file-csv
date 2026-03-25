@@ -159,9 +159,10 @@ def scan_spec(file):
                         interspace = secondary
                         bp_de = 0
                         bp_nde = 0
-# TEST MODE override
-if primary == 0:
-    test_mode = 1
+                    # TEST MODE override
+                
+                   if primary == 0:
+                       test_mode = 1
                     rows.append({
 
                         "Step": step,
