@@ -135,9 +135,11 @@ def scan_spec(file):
                     if isinstance(temp, str) and temp.upper() == "AMB":
                         temp = 60
 
-                    # Robust duration calculation (fix for ValueError)
-                    try:
-                        duration = float(hold) if hold not in [None, ""] else 0
+                    # Robust duration calculation
+try:
+    duration = float(hold)
+except:
+    duration = 0
                     
 
                     acceptance = 1 if isinstance(remarks, str) and remarks.strip() != "" else 0
