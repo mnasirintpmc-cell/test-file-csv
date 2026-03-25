@@ -126,12 +126,12 @@ def scan_spec(file):
 
                     if isinstance(primary_cell, str) and "secondary" in primary_cell.lower():
                         if secondary is not None:
-                            primary = secondary + 10
+                            primary = secondary + 5
                     else:
                         primary = to_float(primary_cell)
 
                     if primary is None and secondary is not None:
-                        primary = secondary + 10
+                        primary = secondary + 5
 
                     if isinstance(temp, str) and temp.upper() == "AMB":
                         temp = 60
@@ -159,15 +159,7 @@ def scan_spec(file):
                         interspace = secondary
                         bp_de = 0
                         bp_nde = 0
-                    # TEST MODE override
-                
-                   if primary == 0:
-                       test_mode = 1
-                        else:
 
-                        interspace = secondary
-                        bp_de = 0
-                        bp_nde = 0
                     rows.append({
 
                         "Step": step,
