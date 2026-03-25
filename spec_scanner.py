@@ -137,7 +137,7 @@ def scan_spec(file):
 
                     # Robust duration calculation
 try:
-    duration = float(hold)
+    duration = int(float(hold)*60)
 except:
     duration = 0
                     
