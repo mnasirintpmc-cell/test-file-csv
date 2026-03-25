@@ -137,9 +137,8 @@ def scan_spec(file):
 
                     # Robust duration calculation (fix for ValueError)
                     try:
-                        duration = float(hold) 
-                    except:
-                        duration = 0
+                        duration = float(hold) if hold not in [None, ""] else 0
+                    
 
                     acceptance = 1 if isinstance(remarks, str) and remarks.strip() != "" else 0
 
