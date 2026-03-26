@@ -30,14 +30,13 @@ def safe_read_csv(file_path_or_buffer):
     return pd.DataFrame()
 
 
-# =====================================================
-# STRICT MACHINE CSV BUILDER (CRITICAL FIX)
-# =====================================================
-
 def build_machine_csv(df):
 
     df = df.copy()
 
+    # ----------------------------
+    # STRICT COLUMN MAP
+    # ----------------------------
     machine_df = pd.DataFrame({
 
         "TST_SpeedDem": df.get("Speed_RPM", 0),
@@ -56,11 +55,43 @@ def build_machine_csv(df):
 
     })
 
-    machine_df = machine_df.fillna(0)
+    # ----------------------------
+    # CLEAN NUMERIC FIELDS (CRITICAL)
+    # ----------------------------
+    numeric_cols = [
+        "TST_SpeedDem",
+        "TST_CellPresDemand",
+        "TST_InterPresDemand",
+        "TST_InterBPDemand_DE",
+        "TST_InterBPDemand_NDE",
+        "TST_GasInjectionDemand",
+        "TST_StepDuration",
+        "TST_APFlag",
+        "TST_TempDemand",
+        "TST_TestMode",
+        "TST_MeasurementReq",
+        "TST_TorqueCheck"
+    ]
+
+    for col in numeric_cols:
+
+        machine_df[col] = (
+            machine_df[col]
+            .astype(str)
+            .str.replace("≥", "", regex=False)
+            .str.replace(">=", "", regex=False)
+            .str.replace("<=", "", regex=False)
+            .str.replace(">", "", regex=False)
+            .str.replace("<", "", regex=False)
+            .str.strip()
+        )
+
+        machine_df[col] = pd.to_numeric(machine_df[col], errors="coerce").fillna(0)
+
+    # Gas type stays string
+    machine_df["TST_GasType"] = machine_df["TST_GasType"].fillna("Air")
 
     return machine_df
-
-
 # =====================================================
 # FILE TYPE DETECTION
 # =====================================================
