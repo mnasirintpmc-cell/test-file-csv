@@ -72,7 +72,7 @@ def scan_spec(file):
 
         name_lower = sheet_name.lower()
 
-        # ORIGINAL LOGIC (KEPT)
+        # KEEP original (not used as authority anymore)
         test_mode = 1
         if "secondary" in name_lower:
             test_mode = 2
@@ -121,9 +121,28 @@ def scan_spec(file):
                     hold = to_float(safe_get(row, step_col+5))
                     remarks = safe_get(row, step_col+8)
 
+                    # =====================================================
+                    # TEST MODE DETECTION (FINAL LOGIC)
+                    # =====================================================
+                    row_test_mode = 1  # default
+
+                    # Primary = 0 → Mode 1
+                    try:
+                        if float(primary_cell) == 0:
+                            row_test_mode = 1
+                    except:
+                        pass
+
+                    # Text → Mode 2
+                    if isinstance(primary_cell, str):
+                        if "secondary" in primary_cell.lower():
+                            row_test_mode = 2
+
+                    # =====================================================
+                    # PRIMARY CALCULATION
+                    # =====================================================
                     primary = None
 
-                    # ΔP BASE RULE → +10
                     if isinstance(primary_cell, str) and "secondary" in primary_cell.lower():
                         if secondary is not None:
                             primary = secondary + 10
@@ -133,40 +152,37 @@ def scan_spec(file):
                     if primary is None and secondary is not None:
                         primary = secondary + 10
 
+                    # =====================================================
+                    # TEMP HANDLING
+                    # =====================================================
                     if isinstance(temp, str) and temp.upper() == "AMB":
                         temp = 60
 
-                    # Duration now in minutes (name unchanged)
+                    # =====================================================
+                    # DURATION (minutes, name unchanged)
+                    # =====================================================
                     duration = float(hold) if hold not in [None, ""] else 0
 
                     acceptance = 1 if isinstance(remarks, str) and remarks.strip() != "" else 0
 
+                    # =====================================================
+                    # PRESSURE MAPPING BASED ON MODE
+                    # =====================================================
                     interspace = 0
                     bp_de = 0
                     bp_nde = 0
 
-                    # ORIGINAL MODE LOGIC (KEPT)
-                    if test_mode == 1:
+                    if row_test_mode == 1:
+                        # Mode 1 → BP
                         interspace = 0
                         bp_de = secondary
                         bp_nde = secondary
-                    else:
+
+                    elif row_test_mode == 2:
+                        # Mode 2 → Interspace
                         interspace = secondary
                         bp_de = 0
                         bp_nde = 0
-
-                    # =====================================================
-                    # SURGICAL FIX → FINAL TEST MODE DERIVATION
-                    # =====================================================
-                    row_test_mode = test_mode  # keep original
-
-                    if primary == 0:
-                        row_test_mode = 1
-                    else:
-                        if interspace > 0:
-                            row_test_mode = 2
-                        elif bp_de > 0 or bp_nde > 0:
-                            row_test_mode = 1
 
                     rows.append({
 
@@ -181,7 +197,7 @@ def scan_spec(file):
                         "Acceptance point": acceptance,
                         "Temperature_C": temp,
                         "Gas_Type": "Air",
-                        "Test_Mode": row_test_mode,  # FIXED
+                        "Test_Mode": row_test_mode,
                         "Measurement": 1,
                         "Torque_Check": 0,
                         "Notes": remarks if remarks else ""
