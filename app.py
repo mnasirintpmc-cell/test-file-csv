@@ -293,7 +293,11 @@ def main():
 
             file_type = detect_file_type(df)
 
-            tech = convert_machine_to_technician(df,file_type)
+if file_type == "unknown":
+    st.error("Unknown file format")
+    return
+
+tech = convert_machine_to_technician(df,file_type)
 
             edited = editable_dataframe(tech)
 
