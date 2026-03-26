@@ -70,13 +70,6 @@ def scan_spec(file):
         if df is None or df.empty:
             continue
 
-        name_lower = sheet_name.lower()
-
-        # KEEP original (not used as authority anymore)
-        test_mode = 1
-        if "secondary" in name_lower:
-            test_mode = 2
-
         for i in range(len(df)):
 
             for j in range(len(df.columns)):
@@ -84,15 +77,6 @@ def scan_spec(file):
                 cell = str(df.iloc[i, j]).strip().lower()
 
                 if cell != "test step":
-                    continue
-
-                col_primary = str(df.iloc[i, j+1]).lower() if j+1 < len(df.columns) else ""
-                col_secondary = str(df.iloc[i, j+2]).lower() if j+2 < len(df.columns) else ""
-
-                if (
-                    "primary seal gas pressure" not in col_primary
-                    or "secondary seal gas pressure" not in col_secondary
-                ):
                     continue
 
                 step_col = j
@@ -121,71 +105,65 @@ def scan_spec(file):
                     hold = to_float(safe_get(row, step_col+5))
                     remarks = safe_get(row, step_col+8)
 
-                    # =====================================================
-                    # TEST MODE DETECTION (FINAL LOGIC)
-                    # =====================================================
-                    row_test_mode = 1  # default
+                    # -------------------------------
+                    # TEST MODE DETECTION
+                    # -------------------------------
+                    row_test_mode = 1
 
-                    # Primary = 0 → Mode 1
+                    if isinstance(primary_cell, str):
+                        if "secondary" in primary_cell.lower():
+                            row_test_mode = 2
+
                     try:
                         if float(primary_cell) == 0:
                             row_test_mode = 1
                     except:
                         pass
 
-                    # Text → Mode 2
-                    if isinstance(primary_cell, str):
-                        if "secondary" in primary_cell.lower():
-                            row_test_mode = 2
-
-                    # =====================================================
-                    # PRIMARY CALCULATION
-                    # =====================================================
-                    primary = None
-
+                    # -------------------------------
+                    # PRIMARY
+                    # -------------------------------
                     if isinstance(primary_cell, str) and "secondary" in primary_cell.lower():
-                        if secondary is not None:
-                            primary = secondary + 10
+                        primary = secondary + 10 if secondary is not None else None
                     else:
                         primary = to_float(primary_cell)
 
                     if primary is None and secondary is not None:
                         primary = secondary + 10
 
-                    # =====================================================
-                    # TEMP HANDLING
-                    # =====================================================
+                    # -------------------------------
+                    # TEMP
+                    # -------------------------------
                     if isinstance(temp, str) and temp.upper() == "AMB":
                         temp = 60
 
-                    # =====================================================
-                    # DURATION (minutes, name unchanged)
-                    # =====================================================
+                    # -------------------------------
+                    # DURATION (minutes)
+                    # -------------------------------
                     duration = float(hold) if hold not in [None, ""] else 0
 
-                    acceptance = 1 if isinstance(remarks, str) and remarks.strip() != "" else 0
+                    # -------------------------------
+                    # ACCEPTANCE FIX (SURGICAL)
+                    # -------------------------------
+                    acceptance = 0
+                    if isinstance(remarks, str):
+                        if "acceptance" in remarks.lower():
+                            acceptance = 1
 
-                    # =====================================================
-                    # PRESSURE MAPPING BASED ON MODE
-                    # =====================================================
+                    # -------------------------------
+                    # PRESSURE MAPPING
+                    # -------------------------------
                     interspace = 0
                     bp_de = 0
                     bp_nde = 0
 
                     if row_test_mode == 1:
-                        # Mode 1 → BP
-                        interspace = 0
                         bp_de = secondary
                         bp_nde = secondary
-
-                    elif row_test_mode == 2:
-                        # Mode 2 → Interspace
+                    else:
                         interspace = secondary
-                        bp_de = 0
-                        bp_nde = 0
 
                     rows.append({
-
                         "Step": step,
                         "Speed_RPM": speed,
                         "Primary seal Gas Pressure (barg)": primary,
@@ -201,7 +179,6 @@ def scan_spec(file):
                         "Measurement": 1,
                         "Torque_Check": 0,
                         "Notes": remarks if remarks else ""
-
                     })
 
     df = pd.DataFrame(rows)
