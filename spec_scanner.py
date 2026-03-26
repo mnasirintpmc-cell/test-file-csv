@@ -72,6 +72,7 @@ def scan_spec(file):
 
         name_lower = sheet_name.lower()
 
+        # ORIGINAL LOGIC (KEPT)
         test_mode = 1
         if "secondary" in name_lower:
             test_mode = 2
@@ -122,7 +123,7 @@ def scan_spec(file):
 
                     primary = None
 
-                    # ΔP FIX → +10
+                    # ΔP BASE RULE → +10
                     if isinstance(primary_cell, str) and "secondary" in primary_cell.lower():
                         if secondary is not None:
                             primary = secondary + 10
@@ -135,7 +136,7 @@ def scan_spec(file):
                     if isinstance(temp, str) and temp.upper() == "AMB":
                         temp = 60
 
-                    # Duration in minutes (column name unchanged)
+                    # Duration now in minutes (name unchanged)
                     duration = float(hold) if hold not in [None, ""] else 0
 
                     acceptance = 1 if isinstance(remarks, str) and remarks.strip() != "" else 0
@@ -144,6 +145,7 @@ def scan_spec(file):
                     bp_de = 0
                     bp_nde = 0
 
+                    # ORIGINAL MODE LOGIC (KEPT)
                     if test_mode == 1:
                         interspace = 0
                         bp_de = secondary
@@ -153,10 +155,18 @@ def scan_spec(file):
                         bp_de = 0
                         bp_nde = 0
 
-                    # TEST MODE override (per row, safe)
-                    row_test_mode = test_mode
+                    # =====================================================
+                    # SURGICAL FIX → FINAL TEST MODE DERIVATION
+                    # =====================================================
+                    row_test_mode = test_mode  # keep original
+
                     if primary == 0:
                         row_test_mode = 1
+                    else:
+                        if interspace > 0:
+                            row_test_mode = 2
+                        elif bp_de > 0 or bp_nde > 0:
+                            row_test_mode = 1
 
                     rows.append({
 
@@ -171,7 +181,7 @@ def scan_spec(file):
                         "Acceptance point": acceptance,
                         "Temperature_C": temp,
                         "Gas_Type": "Air",
-                        "Test_Mode": row_test_mode,
+                        "Test_Mode": row_test_mode,  # FIXED
                         "Measurement": 1,
                         "Torque_Check": 0,
                         "Notes": remarks if remarks else ""
