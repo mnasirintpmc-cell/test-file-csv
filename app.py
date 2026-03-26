@@ -31,6 +31,37 @@ def safe_read_csv(file_path_or_buffer):
 
 
 # =====================================================
+# STRICT MACHINE CSV BUILDER (CRITICAL FIX)
+# =====================================================
+
+def build_machine_csv(df):
+
+    df = df.copy()
+
+    machine_df = pd.DataFrame({
+
+        "TST_SpeedDem": df.get("Speed_RPM", 0),
+        "TST_CellPresDemand": df.get("Primary seal Gas Pressure (barg)", 0),
+        "TST_InterPresDemand": df.get("Interspace_Pressure_bar", 0),
+        "TST_InterBPDemand_DE": df.get("BackPressure_Drive_End_bar", 0),
+        "TST_InterBPDemand_NDE": df.get("BackPressure_Non_Drive_End_bar", 0),
+        "TST_GasInjectionDemand": df.get("Gas_Injection_bar", 0),
+        "TST_StepDuration": df.get("Duration_s", 0),
+        "TST_APFlag": df.get("Acceptance point", 0),
+        "TST_TempDemand": df.get("Temperature_C", 0),
+        "TST_GasType": df.get("Gas_Type", "Air"),
+        "TST_TestMode": df.get("Test_Mode", 1),
+        "TST_MeasurementReq": df.get("Measurement", 1),
+        "TST_TorqueCheck": df.get("Torque_Check", 0)
+
+    })
+
+    machine_df = machine_df.fillna(0)
+
+    return machine_df
+
+
+# =====================================================
 # FILE TYPE DETECTION
 # =====================================================
 
@@ -41,14 +72,34 @@ def detect_file_type(df):
     if "TST_CellPresDemand" in cols or "Primary seal Gas Pressure (barg)" in cols:
         return "main_seal"
 
-    if "TST_SepSealFlwSet1" in cols or "Sep_Seal_Flow_Set1" in cols:
-        return "separation_seal"
-
     return "unknown"
 
 
 # =====================================================
-# EXCEL EXPORT (ONLY ADDITIONS)
+# COLUMN MAPPING (UNCHANGED)
+# =====================================================
+
+def get_column_mapping():
+
+    return {
+        "TST_SpeedDem":"Speed_RPM",
+        "TST_CellPresDemand":"Primary seal Gas Pressure (barg)",
+        "TST_InterPresDemand":"Interspace_Pressure_bar",
+        "TST_InterBPDemand_DE":"BackPressure_Drive_End_bar",
+        "TST_InterBPDemand_NDE":"BackPressure_Non_Drive_End_bar",
+        "TST_GasInjectionDemand":"Gas_Injection_bar",
+        "TST_StepDuration":"Duration_s",
+        "TST_APFlag":"Acceptance point",
+        "TST_TempDemand":"Temperature_C",
+        "TST_GasType":"Gas_Type",
+        "TST_TestMode":"Test_Mode",
+        "TST_MeasurementReq":"Measurement",
+        "TST_TorqueCheck":"Torque_Check"
+    }
+
+
+# =====================================================
+# EXCEL EXPORT (FULL FORMAT + LOGGING)
 # =====================================================
 
 def create_professional_excel_from_data(df,file_type,user_name="",source_name=""):
@@ -92,9 +143,7 @@ def create_professional_excel_from_data(df,file_type,user_name="",source_name=""
 
         ws.set_column(0,len(df.columns)-1,18)
 
-        # --------------------------
-        # INSTRUCTIONS (ADDED ONLY)
-        # --------------------------
+        # INSTRUCTIONS
         instr = wb.add_worksheet("INSTRUCTIONS")
 
         if os.path.exists(logo_path):
@@ -112,34 +161,48 @@ def create_professional_excel_from_data(df,file_type,user_name="",source_name=""
         instr.protect()
 
     output.seek(0)
-
     return output
 
 
 # =====================================================
-# MAIN APP (FULL ORIGINAL FLOW RESTORED)
+# EDITABLE TABLE
+# =====================================================
+
+def editable_dataframe(df):
+
+    edited = st.data_editor(df,use_container_width=True)
+
+    warnings = validate_sequence(edited)
+
+    if warnings:
+        st.error("Safety interlock violations detected")
+        for w in warnings:
+            st.warning(w)
+
+    return edited
+
+
+# =====================================================
+# MAIN APP
 # =====================================================
 
 def main():
 
     st.title("⚙️ DGS Test Manager")
 
-    # ✅ ADD ONLY (does not break anything)
     user_name = st.sidebar.text_input("Operator Name")
 
     operation = st.sidebar.radio(
         "Operation",
         [
-            "Download Template",
             "CSV → Excel",
             "Excel → CSV",
-            "View Current Test",
             "Spec → Technician Excel"
         ]
     )
 
 # -----------------------------------------------------
-# CSV → Excel (RESTORED)
+# CSV → Excel
 # -----------------------------------------------------
 
     if operation=="CSV → Excel":
@@ -148,25 +211,23 @@ def main():
 
         if uploaded:
 
-            source_name = uploaded.name  # ✅ ADDED ONLY
-
             df = safe_read_csv(uploaded)
 
             excel = create_professional_excel_from_data(
                 df,
                 "main_seal",
                 user_name=user_name,
-                source_name=source_name
+                source_name=uploaded.name
             )
 
             st.download_button(
                 "Download Excel",
                 excel.getvalue(),
-                file_name="output.xlsx"
+                file_name="technician_sequence.xlsx"
             )
 
 # -----------------------------------------------------
-# EXCEL → CSV (RESTORED)
+# EXCEL → CSV (STRICT OUTPUT)
 # -----------------------------------------------------
 
     elif operation=="Excel → CSV":
@@ -177,14 +238,18 @@ def main():
 
             df = pd.read_excel(uploaded)
 
+            edited = editable_dataframe(df)
+
+            machine_df = build_machine_csv(edited)
+
             st.download_button(
-                "Download CSV",
-                df.to_csv(index=False),
-                file_name="output.csv"
+                "Download Machine CSV",
+                machine_df.to_csv(index=False, sep=";"),
+                file_name="machine_sequence.csv"
             )
 
 # -----------------------------------------------------
-# SPEC → TECHNICIAN (RESTORED)
+# SPEC → TECHNICIAN
 # -----------------------------------------------------
 
     elif operation=="Spec → Technician Excel":
@@ -196,22 +261,15 @@ def main():
 
         if uploaded:
 
-            source_name = uploaded.name  # ✅ ADDED ONLY
-
             spec_df = scan_spec(uploaded)
 
-            warnings = validate_sequence(spec_df)
-
-            if warnings:
-                st.error("Safety issues detected")
-                for w in warnings:
-                    st.warning(w)
+            edited = editable_dataframe(spec_df)
 
             excel = create_professional_excel_from_data(
-                spec_df,
+                edited,
                 "main_seal",
                 user_name=user_name,
-                source_name=source_name
+                source_name=uploaded.name
             )
 
             st.download_button(
@@ -219,16 +277,6 @@ def main():
                 excel.getvalue(),
                 file_name="technician_sequence.xlsx"
             )
-
-# -----------------------------------------------------
-# OTHER TABS (UNCHANGED PLACEHOLDER)
-# -----------------------------------------------------
-
-    elif operation=="Download Template":
-        st.write("Template logic unchanged")
-
-    elif operation=="View Current Test":
-        st.write("View logic unchanged")
 
 
 if __name__=="__main__":
