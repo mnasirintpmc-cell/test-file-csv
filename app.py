@@ -315,11 +315,15 @@ def main():
 
             edited = editable_dataframe(df)
 
-            mapping = get_column_mapping(file_type)
+        mapping = get_column_mapping(file_type)
 
-            machine_df = convert_to_machine_codes(
-                edited.rename(columns=mapping["technician_to_machine"])
-            )
+if mapping is None:
+    st.error("Unknown file format")
+    return
+
+machine_df = convert_to_machine_codes(
+    edited.rename(columns=mapping["technician_to_machine"])
+)
 
             st.write(machine_df)
 
