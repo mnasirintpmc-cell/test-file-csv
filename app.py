@@ -207,13 +207,14 @@ def convert_to_machine_codes(df):
 
 
 # =====================================================
-# EDITABLE TABLE (TEST MODE FIX)
+# EDITABLE TABLE
 # =====================================================
 
 def editable_dataframe(df):
 
     edited = st.data_editor(df,use_container_width=True)
 
+    # TEST MODE override
     if "Primary seal Gas Pressure (barg)" in edited.columns:
 
         for i,row in edited.iterrows():
@@ -240,7 +241,7 @@ def editable_dataframe(df):
 
 
 # =====================================================
-# MAIN
+# MAIN APP
 # =====================================================
 
 def main():
@@ -249,12 +250,104 @@ def main():
 
     operation = st.sidebar.radio(
         "Operation",
-        ["Download Template","CSV → Excel","Excel → CSV","View Current Test","Spec → Technician Excel"]
+        [
+            "Download Template",
+            "CSV → Excel",
+            "Excel → CSV",
+            "View Current Test",
+            "Spec → Technician Excel"
+        ]
     )
 
     base_dir = os.path.dirname(__file__)
 
-    if operation=="Spec → Technician Excel":
+# -----------------------------------------------------
+# DOWNLOAD TEMPLATE
+# -----------------------------------------------------
+
+    if operation=="Download Template":
+
+        seal = st.selectbox("Seal Type",["Main Seal","Separation Seal"])
+
+        template="MainSealSet2.csv" if seal=="Main Seal" else "SeperationSeal.csv"
+
+        file_type="main_seal" if seal=="Main Seal" else "separation_seal"
+
+        df = safe_read_csv(os.path.join(base_dir,template))
+
+        tech_df = convert_machine_to_technician(df,file_type)
+
+        st.write(tech_df)
+
+# -----------------------------------------------------
+# CSV → Excel
+# -----------------------------------------------------
+
+    elif operation=="CSV → Excel":
+
+        uploaded = st.file_uploader("Upload Machine CSV",type=["csv"])
+
+        if uploaded:
+
+            df = safe_read_csv(uploaded)
+
+            file_type = detect_file_type(df)
+
+            tech = convert_machine_to_technician(df,file_type)
+
+            edited = editable_dataframe(tech)
+
+            st.write(edited)
+
+# -----------------------------------------------------
+# EXCEL → CSV
+# -----------------------------------------------------
+
+    elif operation=="Excel → CSV":
+
+        uploaded = st.file_uploader("Upload Technician Excel",type=["xlsx"])
+
+        if uploaded:
+
+            df = pd.read_excel(uploaded)
+
+            file_type = detect_file_type(df)
+
+            edited = editable_dataframe(df)
+
+            mapping = get_column_mapping(file_type)
+
+            machine_df = convert_to_machine_codes(
+                edited.rename(columns=mapping["technician_to_machine"])
+            )
+
+            st.write(machine_df)
+
+# -----------------------------------------------------
+# VIEW CURRENT TEST
+# -----------------------------------------------------
+
+    elif operation=="View Current Test":
+
+        seal = st.selectbox("Seal Type",["Main Seal","Separation Seal"])
+
+        template="MainSealSet2.csv" if seal=="Main Seal" else "SeperationSeal.csv"
+
+        df = safe_read_csv(os.path.join(base_dir,template))
+
+        file_type = detect_file_type(df)
+
+        edited = editable_dataframe(
+            convert_machine_to_technician(df,file_type)
+        )
+
+        st.write(edited)
+
+# -----------------------------------------------------
+# SPEC → TECHNICIAN
+# -----------------------------------------------------
+
+    elif operation=="Spec → Technician Excel":
 
         uploaded = st.file_uploader(
             "Upload Spec (.xlsb, .xlsm, .xlsx)",
