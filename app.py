@@ -31,7 +31,7 @@ def safe_read_csv(file_path_or_buffer):
 
 
 # =====================================================
-# SAFETY VALIDATION
+# SAFETY VALIDATION (ΔP = 10)
 # =====================================================
 
 def validate_safety(df):
@@ -207,6 +207,25 @@ def convert_to_machine_codes(df):
 
 
 # =====================================================
+# PROFESSIONAL EXCEL EXPORT (RESTORED)
+# =====================================================
+
+def create_professional_excel_from_data(df,file_type):
+
+    df = df.replace({np.nan:""})
+
+    output = io.BytesIO()
+
+    with pd.ExcelWriter(output,engine="xlsxwriter") as writer:
+
+        df.to_excel(writer,sheet_name="TEST_SEQUENCE",index=False)
+
+    output.seek(0)
+
+    return output
+
+
+# =====================================================
 # EDITABLE TABLE
 # =====================================================
 
@@ -214,6 +233,7 @@ def editable_dataframe(df):
 
     edited = st.data_editor(df,use_container_width=True)
 
+    # TEST MODE override
     if "Primary seal Gas Pressure (barg)" in edited.columns:
 
         for i,row in edited.iterrows():
@@ -274,13 +294,15 @@ def main():
 
         df = safe_read_csv(os.path.join(base_dir,template))
 
-        if df.empty:
-            st.error("Template not found or empty")
-            return
-
         tech_df = convert_machine_to_technician(df,file_type)
 
-        st.write(tech_df)
+        excel = create_professional_excel_from_data(tech_df,file_type)
+
+        st.download_button(
+            "Download Template",
+            excel.getvalue(),
+            file_name="template.xlsx"
+        )
 
 # -----------------------------------------------------
 # CSV → Excel
@@ -304,7 +326,13 @@ def main():
 
             edited = editable_dataframe(tech)
 
-            st.write(edited)
+            excel = create_professional_excel_from_data(edited,file_type)
+
+            st.download_button(
+                "Download Technician Excel",
+                excel.getvalue(),
+                file_name="technician_sequence.xlsx"
+            )
 
 # -----------------------------------------------------
 # EXCEL → CSV
@@ -330,9 +358,13 @@ def main():
 
             machine_df = convert_to_machine_codes(
                 edited.rename(columns=mapping["technician_to_machine"])
-            )
+            ).drop(columns=["Step","Notes"],errors="ignore")
 
-            st.write(machine_df)
+            st.download_button(
+                "Download Machine CSV",
+                machine_df.to_csv(index=False,sep=";"),
+                file_name="machine_sequence.csv"
+            )
 
 # -----------------------------------------------------
 # VIEW CURRENT TEST
@@ -352,7 +384,13 @@ def main():
             convert_machine_to_technician(df,file_type)
         )
 
-        st.write(edited)
+        excel = create_professional_excel_from_data(edited,file_type)
+
+        st.download_button(
+            "Download Excel",
+            excel.getvalue(),
+            file_name="current_test.xlsx"
+        )
 
 # -----------------------------------------------------
 # SPEC → TECHNICIAN
@@ -371,7 +409,13 @@ def main():
 
             edited = editable_dataframe(spec_df)
 
-            st.write(edited)
+            excel = create_professional_excel_from_data(edited,"main_seal")
+
+            st.download_button(
+                "Download Technician Excel",
+                excel.getvalue(),
+                file_name="technician_sequence.xlsx"
+            )
 
 
 if __name__=="__main__":
