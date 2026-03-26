@@ -214,7 +214,6 @@ def editable_dataframe(df):
 
     edited = st.data_editor(df,use_container_width=True)
 
-    # TEST MODE override
     if "Primary seal Gas Pressure (barg)" in edited.columns:
 
         for i,row in edited.iterrows():
@@ -275,6 +274,10 @@ def main():
 
         df = safe_read_csv(os.path.join(base_dir,template))
 
+        if df.empty:
+            st.error("Template not found or empty")
+            return
+
         tech_df = convert_machine_to_technician(df,file_type)
 
         st.write(tech_df)
@@ -293,11 +296,11 @@ def main():
 
             file_type = detect_file_type(df)
 
-if file_type == "unknown":
-    st.error("Unknown file format")
-    return
+            if file_type == "unknown":
+                st.error("Unknown file format")
+                return
 
-tech = convert_machine_to_technician(df,file_type)
+            tech = convert_machine_to_technician(df,file_type)
 
             edited = editable_dataframe(tech)
 
@@ -317,17 +320,17 @@ tech = convert_machine_to_technician(df,file_type)
 
             file_type = detect_file_type(df)
 
+            mapping = get_column_mapping(file_type)
+
+            if mapping is None:
+                st.error("Unknown file format")
+                return
+
             edited = editable_dataframe(df)
 
-        mapping = get_column_mapping(file_type)
-
-if mapping is None:
-    st.error("Unknown file format")
-    return
-
-machine_df = convert_to_machine_codes(
-    edited.rename(columns=mapping["technician_to_machine"])
-)
+            machine_df = convert_to_machine_codes(
+                edited.rename(columns=mapping["technician_to_machine"])
+            )
 
             st.write(machine_df)
 
