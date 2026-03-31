@@ -30,13 +30,14 @@ def safe_read_csv(file_path_or_buffer):
     return pd.DataFrame()
 
 
+# =====================================================
+# BUILD MACHINE CSV (WITH TST PASS-THROUGH)
+# =====================================================
+
 def build_machine_csv(df):
 
     df = df.copy()
 
-    # ----------------------------
-    # STRICT COLUMN MAP
-    # ----------------------------
     machine_df = pd.DataFrame({
 
         "TST_SpeedDem": df.get("Speed_RPM", 0),
@@ -56,7 +57,7 @@ def build_machine_csv(df):
     })
 
     # ----------------------------
-    # CLEAN NUMERIC FIELDS (CRITICAL)
+    # CLEAN NUMERIC FIELDS
     # ----------------------------
     numeric_cols = [
         "TST_SpeedDem",
@@ -74,7 +75,6 @@ def build_machine_csv(df):
     ]
 
     for col in numeric_cols:
-
         machine_df[col] = (
             machine_df[col]
             .astype(str)
@@ -85,17 +85,22 @@ def build_machine_csv(df):
             .str.replace("<", "", regex=False)
             .str.strip()
         )
-
         machine_df[col] = pd.to_numeric(machine_df[col], errors="coerce").fillna(0)
 
-    # Gas type stays string
     machine_df["TST_GasType"] = machine_df["TST_GasType"].fillna("Air")
+
+    # ----------------------------
+    # ✅ PASS THROUGH TST_* COLUMNS
+    # ----------------------------
     extra_cols = [col for col in df.columns if col.startswith("TST_")]
+
     for col in extra_cols:
         if col not in machine_df.columns:
             machine_df[col] = df[col]
 
     return machine_df
+
+
 # =====================================================
 # FILE TYPE DETECTION
 # =====================================================
@@ -111,7 +116,7 @@ def detect_file_type(df):
 
 
 # =====================================================
-# COLUMN MAPPING (UNCHANGED)
+# COLUMN MAPPING
 # =====================================================
 
 def get_column_mapping():
@@ -134,13 +139,12 @@ def get_column_mapping():
 
 
 # =====================================================
-# EXCEL EXPORT (FULL FORMAT + LOGGING)
+# EXCEL EXPORT
 # =====================================================
 
 def create_professional_excel_from_data(df,file_type,user_name="",source_name=""):
 
     df = df.replace({np.nan:""})
-
     output = io.BytesIO()
 
     logo_path = os.path.join(os.path.dirname(__file__),"company_logo.png")
@@ -170,7 +174,6 @@ def create_professional_excel_from_data(df,file_type,user_name="",source_name=""
             for c,col in enumerate(df.columns):
 
                 val = df.iloc[r-1,c]
-
                 if pd.isna(val):
                     val = ""
 
@@ -178,7 +181,6 @@ def create_professional_excel_from_data(df,file_type,user_name="",source_name=""
 
         ws.set_column(0,len(df.columns)-1,18)
 
-        # INSTRUCTIONS
         instr = wb.add_worksheet("INSTRUCTIONS")
 
         if os.path.exists(logo_path):
@@ -187,7 +189,6 @@ def create_professional_excel_from_data(df,file_type,user_name="",source_name=""
 
         instr.write(10,1,f"Operator: {user_name}")
         instr.write(11,1,f"Source File: {source_name}")
-
         instr.write(12,1,"SEAL TEST SEQUENCE")
         instr.write(14,1,"1. Edit sequence as required")
         instr.write(15,1,"2. Maintain safe pressure relationships")
@@ -200,27 +201,45 @@ def create_professional_excel_from_data(df,file_type,user_name="",source_name=""
 
 
 # =====================================================
-# EDITABLE TABLE
+# EDITABLE TABLE (FIXED UI)
 # =====================================================
 
 def editable_dataframe(df):
+
+    # ---- ADD COLUMN UI ----
     new_col = st.text_input("Add new TST column (exact name)")
+
     if st.button("Add Column"):
+
         if new_col:
+
+            new_col = new_col.strip()
+
             if not new_col.startswith("TST_"):
-            st.warning("Column must start with TST_")
-        elif new_col in df.columns:
-            st.warning("Column already exists")
+                st.warning("Column must start with TST_")
+
+            elif new_col in df.columns:
+                st.warning("Column already exists")
+
+            else:
+                df[new_col] = 0
+                st.success(f"{new_col} added")
+
         else:
-            df[new_col] = 0
-            st.success(f"{new_col} added")
-            edited = st.data_editor(df,use_container_width=True)
-            warnings = validate_sequence(edited)
-            if warnings:
-                st.error("Safety interlock violations detected")
-                for w in warnings:
-                    st.warning(w)
-                    return edited
+            st.warning("Please enter a column name")
+
+    # ---- TABLE ----
+    edited = st.data_editor(df, use_container_width=True)
+
+    # ---- VALIDATION ----
+    warnings = validate_sequence(edited)
+
+    if warnings:
+        st.error("Safety interlock violations detected")
+        for w in warnings:
+            st.warning(w)
+
+    return edited
 
 
 # =====================================================
@@ -268,7 +287,7 @@ def main():
             )
 
 # -----------------------------------------------------
-# EXCEL → CSV (STRICT OUTPUT)
+# EXCEL → CSV
 # -----------------------------------------------------
 
     elif operation=="Excel → CSV":
