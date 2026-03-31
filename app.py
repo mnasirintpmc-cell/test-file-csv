@@ -185,13 +185,14 @@ def create_professional_excel_from_data(df,file_type,user_name="",source_name=""
 
 
 # =====================================================
-# EDITABLE TABLE
+# EDITABLE TABLE (ROBUST FIX)
 # =====================================================
 
 def editable_dataframe(df):
 
-    if st.session_state.df_state is None:
-        st.session_state.df_state = df.copy()
+    # Initialize master DF once
+    if st.session_state.master_df is None:
+        st.session_state.master_df = df.copy()
 
     new_col = st.text_input("Add new TST column (exact name)")
 
@@ -204,20 +205,39 @@ def editable_dataframe(df):
             if not new_col.startswith("TST_"):
                 st.warning("Column must start with TST_")
 
-            elif new_col in st.session_state.df_state.columns:
+            elif new_col in st.session_state.master_df.columns:
                 st.warning("Column already exists")
 
             else:
-                st.session_state.df_state[new_col] = 0
+                st.session_state.master_df[new_col] = 0
                 st.success(f"{new_col} added")
 
+    # Editor works on a copy
     edited = st.data_editor(
-        st.session_state.df_state,
+        st.session_state.master_df.copy(),
         use_container_width=True,
-        key="data_editor"
+        key="data_editor",
+        num_rows="dynamic"
     )
 
-    st.session_state.df_state = edited
+    # --- SAFE MERGE BACK ---
+    master = st.session_state.master_df.copy()
+
+    # Add missing columns
+    for col in edited.columns:
+        if col not in master.columns:
+            master[col] = edited[col]
+
+    # Preserve all columns
+    for col in master.columns:
+        if col not in edited.columns:
+            edited[col] = master[col]
+
+    # Align structure
+    edited = edited[master.columns]
+
+    # Update master
+    st.session_state.master_df = edited.copy()
 
     warnings = validate_sequence(edited)
 
@@ -237,8 +257,8 @@ def main():
 
     st.title("⚙️ DGS Test Manager")
 
-    if "df_state" not in st.session_state:
-        st.session_state.df_state = None
+    if "master_df" not in st.session_state:
+        st.session_state.master_df = None
 
     if "last_uploaded_file" not in st.session_state:
         st.session_state.last_uploaded_file = None
@@ -283,7 +303,7 @@ def main():
             file_hash = hashlib.md5(uploaded.getvalue()).hexdigest()
 
             if st.session_state.last_uploaded_file != file_hash:
-                st.session_state.df_state = df.copy()
+                st.session_state.master_df = df.copy()
                 st.session_state.last_uploaded_file = file_hash
 
             edited = editable_dataframe(df)
@@ -311,7 +331,7 @@ def main():
             file_hash = hashlib.md5(uploaded.getvalue()).hexdigest()
 
             if st.session_state.last_uploaded_file != file_hash:
-                st.session_state.df_state = spec_df.copy()
+                st.session_state.master_df = spec_df.copy()
                 st.session_state.last_uploaded_file = file_hash
 
             edited = editable_dataframe(spec_df)
