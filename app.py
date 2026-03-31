@@ -90,6 +90,10 @@ def build_machine_csv(df):
 
     # Gas type stays string
     machine_df["TST_GasType"] = machine_df["TST_GasType"].fillna("Air")
+    extra_cols = [col for col in df.columns if col.startswith("TST_")]
+    for col in extra_cols:
+        if col not in machine_df.columns:
+            machine_df[col] = df[col]
 
     return machine_df
 # =====================================================
