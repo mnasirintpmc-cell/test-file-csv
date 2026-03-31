@@ -7,6 +7,7 @@ from datetime import datetime
 from spec_scanner import scan_spec
 from validator import validate_sequence
 
+
 # =====================================================
 # SAFE CSV READER
 # =====================================================
@@ -31,7 +32,7 @@ def safe_read_csv(file_path_or_buffer):
 
 
 # =====================================================
-# BUILD MACHINE CSV (WITH TST PASS-THROUGH)
+# BUILD MACHINE CSV
 # =====================================================
 
 def build_machine_csv(df):
@@ -90,7 +91,7 @@ def build_machine_csv(df):
     machine_df["TST_GasType"] = machine_df["TST_GasType"].fillna("Air")
 
     # ----------------------------
-    # ✅ PASS THROUGH TST_* COLUMNS
+    # PASS THROUGH EXTRA TST COLUMNS
     # ----------------------------
     extra_cols = [col for col in df.columns if col.startswith("TST_")]
 
@@ -172,11 +173,9 @@ def create_professional_excel_from_data(df,file_type,user_name="",source_name=""
 
         for r in range(1,len(df)+1):
             for c,col in enumerate(df.columns):
-
                 val = df.iloc[r-1,c]
                 if pd.isna(val):
                     val = ""
-
                 ws.write(r,c,val,notes if col=="Notes" else cell)
 
         ws.set_column(0,len(df.columns)-1,18)
@@ -201,12 +200,14 @@ def create_professional_excel_from_data(df,file_type,user_name="",source_name=""
 
 
 # =====================================================
-# EDITABLE TABLE (FIXED UI)
+# EDITABLE TABLE (SESSION FIX)
 # =====================================================
 
 def editable_dataframe(df):
 
-    # ---- ADD COLUMN UI ----
+    if "df_state" not in st.session_state:
+        st.session_state.df_state = df.copy()
+
     new_col = st.text_input("Add new TST column (exact name)")
 
     if st.button("Add Column"):
@@ -218,20 +219,23 @@ def editable_dataframe(df):
             if not new_col.startswith("TST_"):
                 st.warning("Column must start with TST_")
 
-            elif new_col in df.columns:
+            elif new_col in st.session_state.df_state.columns:
                 st.warning("Column already exists")
 
             else:
-                df[new_col] = 0
+                st.session_state.df_state[new_col] = 0
                 st.success(f"{new_col} added")
 
         else:
             st.warning("Please enter a column name")
 
-    # ---- TABLE ----
-    edited = st.data_editor(df, use_container_width=True)
+    edited = st.data_editor(
+        st.session_state.df_state,
+        use_container_width=True
+    )
 
-    # ---- VALIDATION ----
+    st.session_state.df_state = edited
+
     warnings = validate_sequence(edited)
 
     if warnings:
@@ -261,10 +265,7 @@ def main():
         ]
     )
 
-# -----------------------------------------------------
 # CSV → Excel
-# -----------------------------------------------------
-
     if operation=="CSV → Excel":
 
         uploaded = st.file_uploader("Upload Machine CSV",type=["csv"])
@@ -286,10 +287,7 @@ def main():
                 file_name="technician_sequence.xlsx"
             )
 
-# -----------------------------------------------------
-# EXCEL → CSV
-# -----------------------------------------------------
-
+# Excel → CSV
     elif operation=="Excel → CSV":
 
         uploaded = st.file_uploader("Upload Technician Excel",type=["xlsx"])
@@ -297,6 +295,8 @@ def main():
         if uploaded:
 
             df = pd.read_excel(uploaded)
+
+            st.session_state.df_state = df.copy()
 
             edited = editable_dataframe(df)
 
@@ -308,10 +308,7 @@ def main():
                 file_name="machine_sequence.csv"
             )
 
-# -----------------------------------------------------
-# SPEC → TECHNICIAN
-# -----------------------------------------------------
-
+# Spec → Technician
     elif operation=="Spec → Technician Excel":
 
         uploaded = st.file_uploader(
@@ -322,6 +319,8 @@ def main():
         if uploaded:
 
             spec_df = scan_spec(uploaded)
+
+            st.session_state.df_state = spec_df.copy()
 
             edited = editable_dataframe(spec_df)
 
