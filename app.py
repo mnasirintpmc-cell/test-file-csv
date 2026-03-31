@@ -93,9 +93,9 @@ def build_machine_csv(df):
 
     return machine_df
     
-    # --------------------------------------------
+# =====================================================
 # PASS THROUGH ANY USER-DEFINED TST_* COLUMNS
-# --------------------------------------------
+# =====================================================
 extra_cols = [col for col in df.columns if col.startswith("TST_")]
 
 for col in extra_cols:
