@@ -163,6 +163,20 @@ def scan_spec(file):
                     else:
                         interspace = secondary
 
+                    # ==========================================
+                    # SURGICAL FIX: FILTER GHOST / EMPTY STEPS
+                    # ==========================================
+                    is_empty_row = (
+                        (speed is None or speed == 0) and
+                        (primary is None or primary == 0) and
+                        (secondary is None or secondary == 0) and
+                        (hold is None or hold == 0) and
+                        (not isinstance(remarks, str) or remarks.strip() == "")
+                    )
+
+                    if is_empty_row:
+                        continue
+
                     rows.append({
                         "Step": step,
                         "Speed_RPM": speed,
