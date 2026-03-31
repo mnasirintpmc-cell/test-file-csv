@@ -207,26 +207,20 @@ def editable_dataframe(df):
     new_col = st.text_input("Add new TST column (exact name)")
     if st.button("Add Column"):
         if new_col:
-
-        if not new_col.startswith("TST_"):
+            if not new_col.startswith("TST_"):
             st.warning("Column must start with TST_")
-
         elif new_col in df.columns:
             st.warning("Column already exists")
-
         else:
             df[new_col] = 0
             st.success(f"{new_col} added")
-    edited = st.data_editor(df,use_container_width=True)
-
-    warnings = validate_sequence(edited)
-
-    if warnings:
-        st.error("Safety interlock violations detected")
-        for w in warnings:
-            st.warning(w)
-
-    return edited
+            edited = st.data_editor(df,use_container_width=True)
+            warnings = validate_sequence(edited)
+            if warnings:
+                st.error("Safety interlock violations detected")
+                for w in warnings:
+                    st.warning(w)
+                    return edited
 
 
 # =====================================================
