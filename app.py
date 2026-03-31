@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import io
 import os
+import hashlib
 from datetime import datetime
 from spec_scanner import scan_spec
 from validator import validate_sequence
@@ -57,42 +58,29 @@ def build_machine_csv(df):
 
     })
 
-    # ----------------------------
-    # CLEAN NUMERIC FIELDS
-    # ----------------------------
     numeric_cols = [
-        "TST_SpeedDem",
-        "TST_CellPresDemand",
-        "TST_InterPresDemand",
-        "TST_InterBPDemand_DE",
-        "TST_InterBPDemand_NDE",
-        "TST_GasInjectionDemand",
-        "TST_StepDuration",
-        "TST_APFlag",
-        "TST_TempDemand",
-        "TST_TestMode",
-        "TST_MeasurementReq",
-        "TST_TorqueCheck"
+        "TST_SpeedDem","TST_CellPresDemand","TST_InterPresDemand",
+        "TST_InterBPDemand_DE","TST_InterBPDemand_NDE",
+        "TST_GasInjectionDemand","TST_StepDuration",
+        "TST_APFlag","TST_TempDemand",
+        "TST_TestMode","TST_MeasurementReq","TST_TorqueCheck"
     ]
 
     for col in numeric_cols:
         machine_df[col] = (
             machine_df[col]
             .astype(str)
-            .str.replace("≥", "", regex=False)
-            .str.replace(">=", "", regex=False)
-            .str.replace("<=", "", regex=False)
-            .str.replace(">", "", regex=False)
-            .str.replace("<", "", regex=False)
+            .str.replace("≥","",regex=False)
+            .str.replace(">=","",regex=False)
+            .str.replace("<=","",regex=False)
+            .str.replace(">","",regex=False)
+            .str.replace("<","",regex=False)
             .str.strip()
         )
-        machine_df[col] = pd.to_numeric(machine_df[col], errors="coerce").fillna(0)
+        machine_df[col] = pd.to_numeric(machine_df[col],errors="coerce").fillna(0)
 
     machine_df["TST_GasType"] = machine_df["TST_GasType"].fillna("Air")
 
-    # ----------------------------
-    # PASS THROUGH EXTRA TST COLUMNS
-    # ----------------------------
     extra_cols = [col for col in df.columns if col.startswith("TST_")]
 
     for col in extra_cols:
@@ -158,11 +146,8 @@ def create_professional_excel_from_data(df,file_type,user_name="",source_name=""
         ws = writer.sheets["TEST_SEQUENCE"]
 
         header = wb.add_format({
-            "bold":True,
-            "align":"center",
-            "border":1,
-            "fg_color":"#366092",
-            "font_color":"white"
+            "bold":True,"align":"center","border":1,
+            "fg_color":"#366092","font_color":"white"
         })
 
         cell = wb.add_format({"border":1,"align":"center"})
@@ -200,12 +185,12 @@ def create_professional_excel_from_data(df,file_type,user_name="",source_name=""
 
 
 # =====================================================
-# EDITABLE TABLE (SESSION FIX)
+# EDITABLE TABLE
 # =====================================================
 
 def editable_dataframe(df):
 
-    if "df_state" not in st.session_state:
+    if st.session_state.df_state is None:
         st.session_state.df_state = df.copy()
 
     new_col = st.text_input("Add new TST column (exact name)")
@@ -226,12 +211,10 @@ def editable_dataframe(df):
                 st.session_state.df_state[new_col] = 0
                 st.success(f"{new_col} added")
 
-        else:
-            st.warning("Please enter a column name")
-
     edited = st.data_editor(
         st.session_state.df_state,
-        use_container_width=True
+        use_container_width=True,
+        key="data_editor"
     )
 
     st.session_state.df_state = edited
@@ -254,15 +237,17 @@ def main():
 
     st.title("⚙️ DGS Test Manager")
 
+    if "df_state" not in st.session_state:
+        st.session_state.df_state = None
+
+    if "last_uploaded_file" not in st.session_state:
+        st.session_state.last_uploaded_file = None
+
     user_name = st.sidebar.text_input("Operator Name")
 
     operation = st.sidebar.radio(
         "Operation",
-        [
-            "CSV → Excel",
-            "Excel → CSV",
-            "Spec → Technician Excel"
-        ]
+        ["CSV → Excel","Excel → CSV","Spec → Technician Excel"]
     )
 
 # CSV → Excel
@@ -275,8 +260,7 @@ def main():
             df = safe_read_csv(uploaded)
 
             excel = create_professional_excel_from_data(
-                df,
-                "main_seal",
+                df,"main_seal",
                 user_name=user_name,
                 source_name=uploaded.name
             )
@@ -296,7 +280,11 @@ def main():
 
             df = pd.read_excel(uploaded)
 
-            st.session_state.df_state = df.copy()
+            file_hash = hashlib.md5(uploaded.getvalue()).hexdigest()
+
+            if st.session_state.last_uploaded_file != file_hash:
+                st.session_state.df_state = df.copy()
+                st.session_state.last_uploaded_file = file_hash
 
             edited = editable_dataframe(df)
 
@@ -320,7 +308,11 @@ def main():
 
             spec_df = scan_spec(uploaded)
 
-            st.session_state.df_state = spec_df.copy()
+            file_hash = hashlib.md5(uploaded.getvalue()).hexdigest()
+
+            if st.session_state.last_uploaded_file != file_hash:
+                st.session_state.df_state = spec_df.copy()
+                st.session_state.last_uploaded_file = file_hash
 
             edited = editable_dataframe(spec_df)
 
