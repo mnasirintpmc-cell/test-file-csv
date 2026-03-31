@@ -33,28 +33,32 @@ def safe_read_csv(file_path_or_buffer):
 
 
 # =====================================================
-# BUILD MACHINE CSV
+# BUILD MACHINE CSV  ✅ FIXED
 # =====================================================
 
 def build_machine_csv(df):
 
     df = df.copy()
 
+    # --- SAFE COLUMN ACCESS (NO FAKE VALUES) ---
+    def safe_col(name):
+        return df[name] if name in df.columns else pd.Series([np.nan]*len(df))
+
     machine_df = pd.DataFrame({
 
-        "TST_SpeedDem": df.get("Speed_RPM", 0),
-        "TST_CellPresDemand": df.get("Primary seal Gas Pressure (barg)", 0),
-        "TST_InterPresDemand": df.get("Interspace_Pressure_bar", 0),
-        "TST_InterBPDemand_DE": df.get("BackPressure_Drive_End_bar", 0),
-        "TST_InterBPDemand_NDE": df.get("BackPressure_Non_Drive_End_bar", 0),
-        "TST_GasInjectionDemand": df.get("Gas_Injection_bar", 0),
-        "TST_StepDuration": df.get("Duration_s", 0),
-        "TST_APFlag": df.get("Acceptance point", 0),
-        "TST_TempDemand": df.get("Temperature_C", 0),
-        "TST_GasType": df.get("Gas_Type", "Air"),
-        "TST_TestMode": df.get("Test_Mode", 1),
-        "TST_MeasurementReq": df.get("Measurement", 1),
-        "TST_TorqueCheck": df.get("Torque_Check", 0)
+        "TST_SpeedDem": safe_col("Speed_RPM"),
+        "TST_CellPresDemand": safe_col("Primary seal Gas Pressure (barg)"),
+        "TST_InterPresDemand": safe_col("Interspace_Pressure_bar"),
+        "TST_InterBPDemand_DE": safe_col("BackPressure_Drive_End_bar"),
+        "TST_InterBPDemand_NDE": safe_col("BackPressure_Non_Drive_End_bar"),
+        "TST_GasInjectionDemand": safe_col("Gas_Injection_bar"),
+        "TST_StepDuration": safe_col("Duration_s"),
+        "TST_APFlag": safe_col("Acceptance point"),
+        "TST_TempDemand": safe_col("Temperature_C"),
+        "TST_GasType": safe_col("Gas_Type"),
+        "TST_TestMode": safe_col("Test_Mode"),
+        "TST_MeasurementReq": safe_col("Measurement"),
+        "TST_TorqueCheck": safe_col("Torque_Check")
 
     })
 
@@ -75,7 +79,6 @@ def build_machine_csv(df):
         # =============================
         if col == "TST_TempDemand":
 
-            # AMB → 30
             series = series.replace({"AMB":"30","amb":"30"})
 
             greater_mask = series.str.contains(">", regex=False)
@@ -90,18 +93,17 @@ def build_machine_csv(df):
                 .str.replace("<","",regex=False)
             )
 
-            series = pd.to_numeric(series, errors="coerce").fillna(0)
+            # ✅ NO fillna(0)
+            series = pd.to_numeric(series, errors="coerce")
 
-            series[greater_mask] = series[greater_mask] + 1
-            series[less_mask] = series[less_mask] - 1
+            series.loc[greater_mask] = series.loc[greater_mask] + 1
+            series.loc[less_mask] = series.loc[less_mask] - 1
 
             machine_df[col] = series
 
         else:
-            # =============================
-            # STANDARD CLEANING
-            # =============================
-            machine_df[col] = (
+
+            series = (
                 series
                 .str.replace("≥","",regex=False)
                 .str.replace(">=","",regex=False)
@@ -110,10 +112,12 @@ def build_machine_csv(df):
                 .str.replace("<","",regex=False)
             )
 
-            machine_df[col] = pd.to_numeric(machine_df[col],errors="coerce").fillna(0)
+            # ✅ NO fillna(0)
+            machine_df[col] = pd.to_numeric(series, errors="coerce")
 
     machine_df["TST_GasType"] = machine_df["TST_GasType"].fillna("Air")
 
+    # Preserve extra TST columns
     extra_cols = [col for col in df.columns if col.startswith("TST_")]
 
     for col in extra_cols:
@@ -124,7 +128,7 @@ def build_machine_csv(df):
 
 
 # =====================================================
-# FILE TYPE DETECTION
+# REST OF YOUR CODE (UNCHANGED)
 # =====================================================
 
 def detect_file_type(df):
@@ -136,10 +140,6 @@ def detect_file_type(df):
 
     return "unknown"
 
-
-# =====================================================
-# COLUMN MAPPING
-# =====================================================
 
 def get_column_mapping():
 
@@ -159,10 +159,6 @@ def get_column_mapping():
         "TST_TorqueCheck":"Torque_Check"
     }
 
-
-# =====================================================
-# EXCEL EXPORT
-# =====================================================
 
 def create_professional_excel_from_data(df,file_type,user_name="",source_name=""):
 
@@ -217,9 +213,7 @@ def create_professional_excel_from_data(df,file_type,user_name="",source_name=""
     return output
 
 
-# =====================================================
-# EDITABLE TABLE (UNCHANGED)
-# =====================================================
+# (editable_dataframe + main unchanged from your version)
 
 def editable_dataframe(df):
 
@@ -274,10 +268,6 @@ def editable_dataframe(df):
 
     return edited
 
-
-# =====================================================
-# MAIN APP (UNCHANGED)
-# =====================================================
 
 def main():
 
