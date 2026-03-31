@@ -67,17 +67,50 @@ def build_machine_csv(df):
     ]
 
     for col in numeric_cols:
-        machine_df[col] = (
-            machine_df[col]
-            .astype(str)
-            .str.replace("≥","",regex=False)
-            .str.replace(">=","",regex=False)
-            .str.replace("<=","",regex=False)
-            .str.replace(">","",regex=False)
-            .str.replace("<","",regex=False)
-            .str.strip()
-        )
-        machine_df[col] = pd.to_numeric(machine_df[col],errors="coerce").fillna(0)
+
+        series = machine_df[col].astype(str).str.strip()
+
+        # =============================
+        # TEMPERATURE SPECIAL LOGIC
+        # =============================
+        if col == "TST_TempDemand":
+
+            # AMB → 30
+            series = series.replace({"AMB":"30","amb":"30"})
+
+            greater_mask = series.str.contains(">", regex=False)
+            less_mask = series.str.contains("<", regex=False)
+
+            series = (
+                series
+                .str.replace("≥","",regex=False)
+                .str.replace(">=","",regex=False)
+                .str.replace("<=","",regex=False)
+                .str.replace(">","",regex=False)
+                .str.replace("<","",regex=False)
+            )
+
+            series = pd.to_numeric(series, errors="coerce").fillna(0)
+
+            series[greater_mask] = series[greater_mask] + 1
+            series[less_mask] = series[less_mask] - 1
+
+            machine_df[col] = series
+
+        else:
+            # =============================
+            # STANDARD CLEANING
+            # =============================
+            machine_df[col] = (
+                series
+                .str.replace("≥","",regex=False)
+                .str.replace(">=","",regex=False)
+                .str.replace("<=","",regex=False)
+                .str.replace(">","",regex=False)
+                .str.replace("<","",regex=False)
+            )
+
+            machine_df[col] = pd.to_numeric(machine_df[col],errors="coerce").fillna(0)
 
     machine_df["TST_GasType"] = machine_df["TST_GasType"].fillna("Air")
 
@@ -185,12 +218,11 @@ def create_professional_excel_from_data(df,file_type,user_name="",source_name=""
 
 
 # =====================================================
-# EDITABLE TABLE (ROBUST FIX)
+# EDITABLE TABLE (UNCHANGED)
 # =====================================================
 
 def editable_dataframe(df):
 
-    # Initialize master DF once
     if st.session_state.master_df is None:
         st.session_state.master_df = df.copy()
 
@@ -212,7 +244,6 @@ def editable_dataframe(df):
                 st.session_state.master_df[new_col] = 0
                 st.success(f"{new_col} added")
 
-    # Editor works on a copy
     edited = st.data_editor(
         st.session_state.master_df.copy(),
         use_container_width=True,
@@ -220,23 +251,18 @@ def editable_dataframe(df):
         num_rows="dynamic"
     )
 
-    # --- SAFE MERGE BACK ---
     master = st.session_state.master_df.copy()
 
-    # Add missing columns
     for col in edited.columns:
         if col not in master.columns:
             master[col] = edited[col]
 
-    # Preserve all columns
     for col in master.columns:
         if col not in edited.columns:
             edited[col] = master[col]
 
-    # Align structure
     edited = edited[master.columns]
 
-    # Update master
     st.session_state.master_df = edited.copy()
 
     warnings = validate_sequence(edited)
@@ -250,7 +276,7 @@ def editable_dataframe(df):
 
 
 # =====================================================
-# MAIN APP
+# MAIN APP (UNCHANGED)
 # =====================================================
 
 def main():
@@ -270,7 +296,6 @@ def main():
         ["CSV → Excel","Excel → CSV","Spec → Technician Excel"]
     )
 
-# CSV → Excel
     if operation=="CSV → Excel":
 
         uploaded = st.file_uploader("Upload Machine CSV",type=["csv"])
@@ -291,7 +316,6 @@ def main():
                 file_name="technician_sequence.xlsx"
             )
 
-# Excel → CSV
     elif operation=="Excel → CSV":
 
         uploaded = st.file_uploader("Upload Technician Excel",type=["xlsx"])
@@ -316,7 +340,6 @@ def main():
                 file_name="machine_sequence.csv"
             )
 
-# Spec → Technician
     elif operation=="Spec → Technician Excel":
 
         uploaded = st.file_uploader(
