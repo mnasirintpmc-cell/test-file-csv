@@ -197,7 +197,38 @@ def scan_spec(file):
 
     df = pd.DataFrame(rows)
 
+    # =====================================================
+    # 🔥 SURGICAL FIX: STEP DEDUPLICATION (NO LOGIC REMOVED)
+    # =====================================================
     if not df.empty:
-        df = df.sort_values("Step").reset_index(drop=True)
+
+        def merge_rows(group):
+
+            base = group.iloc[0].copy()
+
+            for _, row in group.iterrows():
+
+                for col in group.columns:
+
+                    val_base = base[col]
+                    val_new = row[col]
+
+                    # Keep existing valid value
+                    if pd.notna(val_base) and val_base not in [0, "", None]:
+                        continue
+
+                    # Replace only if new value is meaningful
+                    if pd.notna(val_new) and val_new not in [0, "", None]:
+                        base[col] = val_new
+
+            return base
+
+        df = (
+            df
+            .sort_values("Step")
+            .groupby("Step", as_index=False)
+            .apply(merge_rows)
+            .reset_index(drop=True)
+        )
 
     return df
