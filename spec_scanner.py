@@ -12,8 +12,6 @@ except ImportError:
 
 
 def safe_get(row, idx):
-    if idx is None:
-        return None
     if idx < len(row):
         return row[idx]
     return None
@@ -83,28 +81,6 @@ def scan_spec(file):
 
                 step_col = j
 
-                # =====================================================
-                # 🔥 SURGICAL FIX: HEADER-BASED COLUMN DETECTION
-                # =====================================================
-                header_row = df.iloc[i].astype(str).str.lower().tolist()
-
-                def find_col(keywords):
-                    for idx, val in enumerate(header_row):
-                        for k in keywords:
-                            if k in val:
-                                return idx
-                    return None
-
-                col_map = {
-                    "step": step_col,
-                    "speed": find_col(["speed", "rpm"]),
-                    "primary": find_col(["primary"]),
-                    "secondary": find_col(["secondary", "interspace"]),
-                    "temp": find_col(["temp"]),
-                    "hold": find_col(["hold", "duration"]),
-                    "remarks": find_col(["remark", "note"])
-                }
-
                 for k in range(i+1, len(df)):
 
                     row = df.iloc[k].tolist()
@@ -122,24 +98,12 @@ def scan_spec(file):
                     except:
                         continue
 
-                    # =====================================================
-                    # 🔥 USE DETECTED COLUMNS (WITH SAFE FALLBACK)
-                    # =====================================================
-                    speed = to_float(safe_get(row, col_map["speed"]))
-                    primary_cell = safe_get(row, col_map["primary"])
-                    secondary = to_float(safe_get(row, col_map["secondary"]))
-                    temp = safe_get(row, col_map["temp"])
-                    hold = to_float(safe_get(row, col_map["hold"]))
-                    remarks = safe_get(row, col_map["remarks"])
-
-                    # Fallback if detection failed
-                    if primary_cell is None and secondary is None:
-                        speed = to_float(safe_get(row, step_col+1))
-                        primary_cell = safe_get(row, step_col+2)
-                        secondary = to_float(safe_get(row, step_col+3))
-                        temp = safe_get(row, step_col+4)
-                        hold = to_float(safe_get(row, step_col+5))
-                        remarks = safe_get(row, step_col+8)
+                    primary_cell = safe_get(row, step_col+1)
+                    secondary = to_float(safe_get(row, step_col+2))
+                    speed = to_float(safe_get(row, step_col+3))
+                    temp = safe_get(row, step_col+4)
+                    hold = to_float(safe_get(row, step_col+5))
+                    remarks = safe_get(row, step_col+8)
 
                     # -------------------------------
                     # TEST MODE DETECTION
@@ -155,15 +119,6 @@ def scan_spec(file):
                             row_test_mode = 1
                     except:
                         pass
-
-                    # =====================================================
-                    # 🔥 SURGICAL FIX: FORCE MODE 2 FOR CLEAN NUMERIC ROWS
-                    # =====================================================
-                    if row_test_mode == 1:
-                        if (
-                            isinstance(primary_cell, (int, float)) or to_float(primary_cell) is not None
-                        ) and secondary is not None:
-                            row_test_mode = 2
 
                     # -------------------------------
                     # PRIMARY
@@ -243,7 +198,7 @@ def scan_spec(file):
     df = pd.DataFrame(rows)
 
     # =====================================================
-    # 🔥 SURGICAL FIX: STEP DEDUPLICATION (UNCHANGED)
+    # 🔥 SURGICAL FIX: STEP DEDUPLICATION (NO LOGIC REMOVED)
     # =====================================================
     if not df.empty:
 
@@ -258,9 +213,11 @@ def scan_spec(file):
                     val_base = base[col]
                     val_new = row[col]
 
+                    # Keep existing valid value
                     if pd.notna(val_base) and val_base not in [0, "", None]:
                         continue
 
+                    # Replace only if new value is meaningful
                     if pd.notna(val_new) and val_new not in [0, "", None]:
                         base[col] = val_new
 
