@@ -37,35 +37,6 @@ def _detect_engine(file):
     return "openpyxl"
 
 # =========================
-# HEADER DETECTION
-# =========================
-def find_header_row(df):
-    for i in range(len(df)):
-        row = df.iloc[i].astype(str).str.lower()
-        if any("step" in c for c in row):
-            return i
-    return None
-
-def build_column_map(header_row):
-    col_map = {}
-    for idx, col in enumerate(header_row.astype(str).str.lower()):
-        if "step" in col:
-            col_map["step"] = idx
-        elif "primary" in col:
-            col_map["primary"] = idx
-        elif "secondary" in col:
-            col_map["secondary"] = idx
-        elif "speed" in col:
-            col_map["speed"] = idx
-        elif "temp" in col:
-            col_map["temp"] = idx
-        elif "hold" in col or "duration" in col:
-            col_map["hold"] = idx
-        elif "remark" in col:
-            col_map["remarks"] = idx
-    return col_map
-
-# =========================
 # FLOW LIMIT EXTRACTION (PATCHED)
 # =========================
 def extract_flow_limits(remarks):
@@ -75,7 +46,7 @@ def extract_flow_limits(remarks):
     if isinstance(remarks, str):
         text = remarks.lower()
 
-        # ---- SURGICAL FIX: safer regex ----
+        # robust regex
         ib_match = re.search(r"(i\s*/?\s*b[^0-9]*)(\d+\.?\d*)", text)
         ob_match = re.search(r"(o\s*/?\s*b[^0-9]*)(\d+\.?\d*)", text)
 
@@ -88,7 +59,7 @@ def extract_flow_limits(remarks):
     return is_flow, ob_flow
 
 # =========================
-# ORIGINAL SCANNER (ITERATED)
+# MAIN SCANNER
 # =========================
 def scan_spec(file):
 
@@ -135,7 +106,7 @@ def scan_spec(file):
                     hold = to_float(safe_get(row, step_col+5))
 
                     # =========================
-                    # REMARKS (SURGICAL FIX)
+                    # REMARKS (FIXED)
                     # =========================
                     remarks = safe_get(row, step_col+8)
 
@@ -160,7 +131,7 @@ def scan_spec(file):
                                         break
 
                     # =========================
-                    # TEST MODE (ITERATED FIX)
+                    # TEST MODE
                     # =========================
                     row_test_mode = 1
 
@@ -208,13 +179,6 @@ def scan_spec(file):
                     # =========================
                     is_flow, ob_flow = extract_flow_limits(remarks)
 
-                    # ---- DEBUG (temporary) ----
-                    if step == 56:
-                        print("\n--- DEBUG STEP 56 ---")
-                        print("ROW:", row)
-                        print("REMARKS:", remarks)
-                        print("IS:", is_flow, "OB:", ob_flow)
-
                     rows.append({
                         "Step": step,
                         "Row_Type": "PROCESS",
@@ -238,8 +202,16 @@ def scan_spec(file):
 
     df = pd.DataFrame(rows)
 
-    if not df.empty:
-        df = df.sort_values("Step").reset_index(drop=True)
+    if df.empty:
+        return df
+
+    # =========================
+    # 🔥 FINAL FIX: STATE PROPAGATION
+    # =========================
+    df = df.sort_values("Step").reset_index(drop=True)
+
+    df["ISFlowLimit"] = df["ISFlowLimit"].ffill()
+    df["OBFlowLimit"] = df["OBFlowLimit"].ffill()
 
     return df
 
