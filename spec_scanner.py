@@ -37,7 +37,36 @@ def _detect_engine(file):
     return "openpyxl"
 
 # =========================
-# FLOW LIMIT EXTRACTION (TEXT)
+# HEADER DETECTION
+# =========================
+def find_header_row(df):
+    for i in range(len(df)):
+        row = df.iloc[i].astype(str).str.lower()
+        if any("step" in c for c in row):
+            return i
+    return None
+
+def build_column_map(header_row):
+    col_map = {}
+    for idx, col in enumerate(header_row.astype(str).str.lower()):
+        if "step" in col:
+            col_map["step"] = idx
+        elif "primary" in col:
+            col_map["primary"] = idx
+        elif "secondary" in col:
+            col_map["secondary"] = idx
+        elif "speed" in col:
+            col_map["speed"] = idx
+        elif "temp" in col:
+            col_map["temp"] = idx
+        elif "hold" in col or "duration" in col:
+            col_map["hold"] = idx
+        elif "remark" in col:
+            col_map["remarks"] = idx
+    return col_map
+
+# =========================
+# FLOW LIMIT EXTRACTION (PATCHED)
 # =========================
 def extract_flow_limits(remarks):
     is_flow = None
@@ -46,6 +75,7 @@ def extract_flow_limits(remarks):
     if isinstance(remarks, str):
         text = remarks.lower()
 
+        # ---- SURGICAL FIX: safer regex ----
         ib_match = re.search(r"(i\s*/?\s*b[^0-9]*)(\d+\.?\d*)", text)
         ob_match = re.search(r"(o\s*/?\s*b[^0-9]*)(\d+\.?\d*)", text)
 
@@ -58,7 +88,7 @@ def extract_flow_limits(remarks):
     return is_flow, ob_flow
 
 # =========================
-# MAIN SCANNER
+# ORIGINAL SCANNER (ITERATED)
 # =========================
 def scan_spec(file):
 
@@ -105,28 +135,32 @@ def scan_spec(file):
                     hold = to_float(safe_get(row, step_col+5))
 
                     # =========================
-                    # REMARKS (COLUMN-AWARE FIX)
+                    # REMARKS (SURGICAL FIX)
                     # =========================
                     remarks = safe_get(row, step_col+8)
 
-                    def is_valid_text(x):
-                        return isinstance(x, str) and x.strip() != ""
-
-                    if not is_valid_text(remarks):
+                    if not isinstance(remarks, str) or remarks.strip() == "":
+                        
+                        # scan right side first
                         for idx in range(step_col+1, len(row)):
                             cell = row[idx]
 
-                            if not is_valid_text(cell):
-                                continue
+                            if isinstance(cell, str):
+                                txt = cell.lower()
+                                if "leak" in txt or "acceptance" in txt:
+                                    remarks = cell
+                                    break
 
-                            txt = cell.lower()
-
-                            if "leak" in txt or "i/b" in txt or "o/b" in txt:
-                                remarks = cell
-                                break
+                        # fallback full row
+                        if not isinstance(remarks, str) or remarks.strip() == "":
+                            for cell in row:
+                                if isinstance(cell, str):
+                                    if "leak" in cell.lower():
+                                        remarks = cell
+                                        break
 
                     # =========================
-                    # TEST MODE
+                    # TEST MODE (ITERATED FIX)
                     # =========================
                     row_test_mode = 1
 
@@ -174,25 +208,7 @@ def scan_spec(file):
                     # =========================
                     is_flow, ob_flow = extract_flow_limits(remarks)
 
-                    # ---- COLUMN NUMERIC FALLBACK (CRITICAL FIX) ----
-                    if is_flow is None or ob_flow is None:
-
-                        numeric_candidates = []
-
-                        for idx in range(step_col+1, len(row)):
-                            val = to_float(row[idx])
-                            if val is not None and val <= 100:
-                                numeric_candidates.append(val)
-
-                        if numeric_candidates:
-                            if ob_flow is None:
-                                ob_flow = numeric_candidates[-1]  # usually OB is last
-                            if is_flow is None and len(numeric_candidates) > 1:
-                                is_flow = numeric_candidates[0]
-
-                    # =========================
-                    # DEBUG (REMOVE LATER)
-                    # =========================
+                    # ---- DEBUG (temporary) ----
                     if step == 56:
                         print("\n--- DEBUG STEP 56 ---")
                         print("ROW:", row)
