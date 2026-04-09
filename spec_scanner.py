@@ -1,6 +1,6 @@
 import pandas as pd
-import sqlite3
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
+import re
 
 # =========================
 # DB CONFIG (PostgreSQL)
@@ -48,9 +48,7 @@ def find_header_row(df):
 
 def build_column_map(header_row):
     col_map = {}
-
     for idx, col in enumerate(header_row.astype(str).str.lower()):
-
         if "step" in col:
             col_map["step"] = idx
         elif "primary" in col:
@@ -65,16 +63,35 @@ def build_column_map(header_row):
             col_map["hold"] = idx
         elif "remark" in col:
             col_map["remarks"] = idx
-
     return col_map
 
 # =========================
-# ORIGINAL SCANNER (KEEP)
+# FLOW LIMIT EXTRACTION
+# =========================
+def extract_flow_limits(remarks):
+    is_flow = None
+    ob_flow = None
+
+    if isinstance(remarks, str):
+        text = remarks.lower()
+
+        ib_match = re.search(r"(i/?b.*?)(\d+\.?\d*)", text)
+        ob_match = re.search(r"(o/?b.*?)(\d+\.?\d*)", text)
+
+        if ib_match:
+            is_flow = to_float(ib_match.group(2))
+
+        if ob_match:
+            ob_flow = to_float(ob_match.group(2))
+
+    return is_flow, ob_flow
+
+# =========================
+# ORIGINAL SCANNER (ITERATED)
 # =========================
 def scan_spec(file):
 
     engine_type = _detect_engine(file)
-
     sheets = pd.read_excel(file, engine=engine_type, sheet_name=None, header=None)
 
     rows = []
@@ -117,17 +134,35 @@ def scan_spec(file):
                     hold = to_float(safe_get(row, step_col+5))
                     remarks = safe_get(row, step_col+8)
 
-                    # TEST MODE
+                    # =========================
+                    # TEST MODE (ITERATED FIX)
+                    # =========================
                     row_test_mode = 1
+
+                    # original logic
                     if isinstance(primary_cell, str) and "secondary" in primary_cell.lower():
                         row_test_mode = 2
 
+                    primary_val = to_float(primary_cell)
+
+                    # new logic (data-driven)
+                    if secondary is not None and primary_val in [None, 0]:
+                        row_test_mode = 2
+
+                    if secondary is not None and primary_val is not None:
+                        if secondary < primary_val:
+                            row_test_mode = 2
+
+                    # =========================
                     # PRIMARY
-                    primary = to_float(primary_cell)
+                    # =========================
+                    primary = primary_val
                     if primary is None and secondary is not None:
                         primary = secondary + 10
 
+                    # =========================
                     # TEMP
+                    # =========================
                     if isinstance(temp, str) and temp.upper() == "AMB":
                         temp = 60
 
@@ -145,6 +180,11 @@ def scan_spec(file):
                     else:
                         interspace = secondary
 
+                    # =========================
+                    # FLOW LIMITS
+                    # =========================
+                    is_flow, ob_flow = extract_flow_limits(remarks)
+
                     rows.append({
                         "Step": step,
                         "Row_Type": "PROCESS",
@@ -161,64 +201,17 @@ def scan_spec(file):
                         "Test_Mode": row_test_mode,
                         "Measurement": 1,
                         "Torque_Check": 0,
-                        "Notes": remarks if remarks else ""
+                        "Notes": remarks if remarks else "",
+                        "ISFlowLimit": is_flow,
+                        "OBFlowLimit": ob_flow
                     })
 
-    return pd.DataFrame(rows)
+    df = pd.DataFrame(rows)
 
-# =========================
-# FALLBACK SCANNER (ROBUST)
-# =========================
-def scan_spec_fallback(file):
+    if not df.empty:
+        df = df.sort_values("Step").reset_index(drop=True)
 
-    engine_type = _detect_engine(file)
-
-    sheets = pd.read_excel(file, engine=engine_type, sheet_name=None, header=None)
-
-    rows = []
-
-    for sheet_name, df in sheets.items():
-
-        if df is None or df.empty:
-            continue
-
-        df = df.fillna(method="ffill")
-
-        header_idx = find_header_row(df)
-        if header_idx is None:
-            continue
-
-        header = df.iloc[header_idx]
-        col_map = build_column_map(header)
-
-        for i in range(header_idx + 1, len(df)):
-
-            row = df.iloc[i].tolist()
-            step = to_float(safe_get(row, col_map.get("step")))
-
-            if step is None:
-                continue
-
-            rows.append({
-                "Step": int(step),
-                "Row_Type": "PROCESS",
-                "Speed_RPM": to_float(safe_get(row, col_map.get("speed"))),
-                "Primary seal Gas Pressure (barg)": to_float(safe_get(row, col_map.get("primary"))),
-                "Interspace_Pressure_bar": to_float(safe_get(row, col_map.get("secondary"))),
-                "BackPressure_Drive_End_bar": 0,
-                "BackPressure_Non_Drive_End_bar": 0,
-                "Gas_Injection_bar": 0,
-                "Duration_s": to_float(safe_get(row, col_map.get("hold"))) or 0,
-                "Acceptance point": 0,
-                "Temperature_C": to_float(safe_get(row, col_map.get("temp"))) or 60,
-                "Gas_Type": "Air",
-                "Test_Mode": 1,
-                "Measurement": 1,
-                "Torque_Check": 0,
-                "Notes": str(safe_get(row, col_map.get("remarks")) or "")
-            })
-
-    return pd.DataFrame(rows)
+    return df
 
 # =========================
 # SAFE ENTRY POINT
@@ -228,7 +221,7 @@ def scan_spec_safe(file):
         return scan_spec(file)
     except Exception as e:
         print(f"[WARN] Primary scan failed: {e}")
-        return scan_spec_fallback(file)
+        return pd.DataFrame()
 
 # =========================
 # SAVE TO POSTGRES
@@ -237,6 +230,10 @@ def save_raw(df, test_id):
 
     df = df.copy()
     df["test_id"] = test_id
+
+    # prevent duplicates
+    with engine.begin() as conn:
+        conn.execute(text(f"DELETE FROM raw_spec WHERE test_id = '{test_id}'"))
 
     df = df.rename(columns={
         "Step": "step",
@@ -254,13 +251,15 @@ def save_raw(df, test_id):
         "Test_Mode": "test_mode",
         "Measurement": "measurement",
         "Torque_Check": "torque_check",
-        "Notes": "notes"
+        "Notes": "notes",
+        "ISFlowLimit": "isflowlimit",
+        "OBFlowLimit": "obflowlimit"
     })
 
     df.to_sql("raw_spec", engine, if_exists="append", index=False)
 
 # =========================
-# EXPORT NORMALIZED CSV
+# EXPORT CSV
 # =========================
 def export_tst(test_id):
 
@@ -276,20 +275,21 @@ def export_tst(test_id):
         COALESCE(duration,0) AS duration,
         acceptance,
         COALESCE(temperature,60) AS temperature,
-        test_mode
+        test_mode,
+        COALESCE(isflowlimit,0) AS "TST_ISFlowLimit",
+        COALESCE(obflowlimit,0) AS "TST_OBFlowLimit"
     FROM raw_spec
     WHERE test_id = '{test_id}'
     ORDER BY step
     """
 
     df = pd.read_sql(query, engine)
-
     df.to_csv(f"TST_{test_id}.csv", index=False)
 
     return df
 
 # =========================
-# MAIN PIPELINE
+# MAIN
 # =========================
 if __name__ == "__main__":
 
@@ -297,6 +297,8 @@ if __name__ == "__main__":
     test_id = "001"
 
     df = scan_spec_safe(file)
+
+    print("Rows extracted:", len(df))
 
     save_raw(df, test_id)
 
