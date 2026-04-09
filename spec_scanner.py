@@ -1,6 +1,5 @@
 import pandas as pd
 from sqlalchemy import create_engine, text
-import re
 
 # =========================
 # DB CONFIG (PostgreSQL)
@@ -29,19 +28,23 @@ def _detect_engine(file):
     return "pyxlsb" if name.endswith(".xlsb") else "openpyxl"
 
 # =========================
-# HEADER DETECTION
+# HEADER DETECTION (FIXED)
 # =========================
 def find_header_row(df):
     for i in range(len(df)):
-        row = df.iloc[i].astype(str).str.lower()
-        if any("step" in c for c in row):
+        row = df.iloc[i]
+
+        # 🔥 FIX: force string conversion
+        if any("step" in str(c).lower() for c in row):
             return i
+
     return None
 
 def build_column_map(header_row):
     col_map = {}
 
-    for idx, col in enumerate(header_row.astype(str).str.lower()):
+    for idx, col in enumerate(header_row):
+        col = str(col).lower()
 
         if "step" in col:
             col_map["step"] = idx
@@ -64,7 +67,7 @@ def build_column_map(header_row):
         elif "remark" in col:
             col_map["remarks"] = idx
 
-        # 🔥 CRITICAL: FLOW COLUMNS
+        # 🔥 FLOW COLUMNS (CRITICAL)
         elif "i/b" in col and "leak" in col:
             col_map["is_flow"] = idx
 
@@ -95,7 +98,6 @@ def scan_spec(file):
         header_row = df.iloc[header_idx]
         col_map = build_column_map(header_row)
 
-        # required fields
         if "step" not in col_map:
             continue
 
@@ -124,7 +126,7 @@ def scan_spec(file):
             remarks = safe_get(row, col_map.get("remarks"))
 
             # =========================
-            # FLOW LIMITS (CORRECT FIX)
+            # FLOW LIMITS (CORRECT)
             # =========================
             is_flow = to_float(safe_get(row, col_map.get("is_flow")))
             ob_flow = to_float(safe_get(row, col_map.get("ob_flow")))
@@ -238,9 +240,9 @@ def save_raw(df, test_id):
         "Test_Mode": "test_mode",
         "Measurement": "measurement",
         "Torque_Check": "torque_check",
-        "Notes": "notes",
         "ISFlowLimit": "isflowlimit",
-        "OBFlowLimit": "obflowlimit"
+        "OBFlowLimit": "obflowlimit",
+        "Notes": "notes"
     })
 
     df.to_sql("raw_spec", engine, if_exists="append", index=False)
