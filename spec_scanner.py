@@ -20,21 +20,13 @@ def to_float(v):
     try:
         if v is None:
             return None
-        v = str(v).replace(",", "").strip()
-        return float(v)
+        return float(str(v).strip())
     except:
         return None
 
 def _detect_engine(file):
-    name = ""
-    if hasattr(file, "name"):
-        name = file.name.lower()
-    elif isinstance(file, str):
-        name = file.lower()
-
-    if name.endswith(".xlsb"):
-        return "pyxlsb"
-    return "openpyxl"
+    name = file.name.lower() if hasattr(file, "name") else str(file).lower()
+    return "pyxlsb" if name.endswith(".xlsb") else "openpyxl"
 
 # =========================
 # HEADER DETECTION
@@ -48,47 +40,41 @@ def find_header_row(df):
 
 def build_column_map(header_row):
     col_map = {}
+
     for idx, col in enumerate(header_row.astype(str).str.lower()):
+
         if "step" in col:
             col_map["step"] = idx
+
         elif "primary" in col:
             col_map["primary"] = idx
+
         elif "secondary" in col:
             col_map["secondary"] = idx
+
         elif "speed" in col:
             col_map["speed"] = idx
+
         elif "temp" in col:
             col_map["temp"] = idx
+
         elif "hold" in col or "duration" in col:
             col_map["hold"] = idx
+
         elif "remark" in col:
             col_map["remarks"] = idx
+
+        # 🔥 CRITICAL: FLOW COLUMNS
+        elif "i/b" in col and "leak" in col:
+            col_map["is_flow"] = idx
+
+        elif "o/b" in col and "leak" in col:
+            col_map["ob_flow"] = idx
+
     return col_map
 
 # =========================
-# FLOW LIMIT EXTRACTION (PATCHED)
-# =========================
-def extract_flow_limits(remarks):
-    is_flow = None
-    ob_flow = None
-
-    if isinstance(remarks, str):
-        text = remarks.lower()
-
-        # ---- SURGICAL FIX: safer regex ----
-        ib_match = re.search(r"(i\s*/?\s*b[^0-9]*)(\d+\.?\d*)", text)
-        ob_match = re.search(r"(o\s*/?\s*b[^0-9]*)(\d+\.?\d*)", text)
-
-        if ib_match:
-            is_flow = to_float(ib_match.group(2))
-
-        if ob_match:
-            ob_flow = to_float(ob_match.group(2))
-
-    return is_flow, ob_flow
-
-# =========================
-# ORIGINAL SCANNER (ITERATED)
+# MAIN SCANNER
 # =========================
 def scan_spec(file):
 
@@ -102,139 +88,111 @@ def scan_spec(file):
         if df is None or df.empty:
             continue
 
-        for i in range(len(df)):
-            for j in range(len(df.columns)):
+        header_idx = find_header_row(df)
+        if header_idx is None:
+            continue
 
-                cell = str(df.iloc[i, j]).strip().lower()
+        header_row = df.iloc[header_idx]
+        col_map = build_column_map(header_row)
 
-                if cell != "test step":
-                    continue
+        # required fields
+        if "step" not in col_map:
+            continue
 
-                step_col = j
+        for k in range(header_idx + 1, len(df)):
 
-                for k in range(i+1, len(df)):
+            row = df.iloc[k].tolist()
 
-                    row = df.iloc[k].tolist()
-                    step_val = safe_get(row, step_col)
+            step_val = safe_get(row, col_map.get("step"))
 
-                    if step_val is None:
-                        continue
+            if step_val is None:
+                continue
 
-                    if "end of" in str(step_val).lower():
-                        break
+            if "end of" in str(step_val).lower():
+                break
 
-                    try:
-                        step = int(float(step_val))
-                    except:
-                        continue
+            try:
+                step = int(float(step_val))
+            except:
+                continue
 
-                    primary_cell = safe_get(row, step_col+1)
-                    secondary = to_float(safe_get(row, step_col+2))
-                    speed = to_float(safe_get(row, step_col+3))
-                    temp = safe_get(row, step_col+4)
-                    hold = to_float(safe_get(row, step_col+5))
+            primary_cell = safe_get(row, col_map.get("primary"))
+            secondary = to_float(safe_get(row, col_map.get("secondary")))
+            speed = to_float(safe_get(row, col_map.get("speed")))
+            temp = safe_get(row, col_map.get("temp"))
+            hold = to_float(safe_get(row, col_map.get("hold")))
+            remarks = safe_get(row, col_map.get("remarks"))
 
-                    # =========================
-                    # REMARKS (SURGICAL FIX)
-                    # =========================
-                    remarks = safe_get(row, step_col+8)
+            # =========================
+            # FLOW LIMITS (CORRECT FIX)
+            # =========================
+            is_flow = to_float(safe_get(row, col_map.get("is_flow")))
+            ob_flow = to_float(safe_get(row, col_map.get("ob_flow")))
 
-                    if not isinstance(remarks, str) or remarks.strip() == "":
-                        
-                        # scan right side first
-                        for idx in range(step_col+1, len(row)):
-                            cell = row[idx]
+            # =========================
+            # TEST MODE
+            # =========================
+            row_test_mode = 1
 
-                            if isinstance(cell, str):
-                                txt = cell.lower()
-                                if "leak" in txt or "acceptance" in txt:
-                                    remarks = cell
-                                    break
+            if isinstance(primary_cell, str) and "secondary" in primary_cell.lower():
+                row_test_mode = 2
 
-                        # fallback full row
-                        if not isinstance(remarks, str) or remarks.strip() == "":
-                            for cell in row:
-                                if isinstance(cell, str):
-                                    if "leak" in cell.lower():
-                                        remarks = cell
-                                        break
+            primary_val = to_float(primary_cell)
 
-                    # =========================
-                    # TEST MODE (ITERATED FIX)
-                    # =========================
-                    row_test_mode = 1
+            if secondary is not None and primary_val in [None, 0]:
+                row_test_mode = 2
 
-                    if isinstance(primary_cell, str) and "secondary" in primary_cell.lower():
-                        row_test_mode = 2
+            if secondary is not None and primary_val is not None:
+                if secondary < primary_val:
+                    row_test_mode = 2
 
-                    primary_val = to_float(primary_cell)
+            # =========================
+            # PRIMARY
+            # =========================
+            primary = primary_val
+            if primary is None and secondary is not None:
+                primary = secondary + 10
 
-                    if secondary is not None and primary_val in [None, 0]:
-                        row_test_mode = 2
+            # =========================
+            # TEMP
+            # =========================
+            if isinstance(temp, str) and temp.upper() == "AMB":
+                temp = 60
 
-                    if secondary is not None and primary_val is not None:
-                        if secondary < primary_val:
-                            row_test_mode = 2
+            duration = hold if hold else 0
 
-                    # =========================
-                    # PRIMARY
-                    # =========================
-                    primary = primary_val
-                    if primary is None and secondary is not None:
-                        primary = secondary + 10
+            acceptance = 1 if isinstance(remarks, str) and "acceptance" in remarks.lower() else 0
 
-                    # =========================
-                    # TEMP
-                    # =========================
-                    if isinstance(temp, str) and temp.upper() == "AMB":
-                        temp = 60
+            interspace = 0
+            bp_de = 0
+            bp_nde = 0
 
-                    duration = hold if hold else 0
+            if row_test_mode == 1:
+                bp_de = secondary
+                bp_nde = secondary
+            else:
+                interspace = secondary
 
-                    acceptance = 1 if isinstance(remarks, str) and "acceptance" in remarks.lower() else 0
-
-                    interspace = 0
-                    bp_de = 0
-                    bp_nde = 0
-
-                    if row_test_mode == 1:
-                        bp_de = secondary
-                        bp_nde = secondary
-                    else:
-                        interspace = secondary
-
-                    # =========================
-                    # FLOW LIMITS
-                    # =========================
-                    is_flow, ob_flow = extract_flow_limits(remarks)
-
-                    # ---- DEBUG (temporary) ----
-                    if step == 56:
-                        print("\n--- DEBUG STEP 56 ---")
-                        print("ROW:", row)
-                        print("REMARKS:", remarks)
-                        print("IS:", is_flow, "OB:", ob_flow)
-
-                    rows.append({
-                        "Step": step,
-                        "Row_Type": "PROCESS",
-                        "Speed_RPM": speed,
-                        "Primary seal Gas Pressure (barg)": primary,
-                        "Interspace_Pressure_bar": interspace,
-                        "BackPressure_Drive_End_bar": bp_de,
-                        "BackPressure_Non_Drive_End_bar": bp_nde,
-                        "Gas_Injection_bar": 0,
-                        "Duration_s": duration,
-                        "Acceptance point": acceptance,
-                        "Temperature_C": temp,
-                        "Gas_Type": "Air",
-                        "Test_Mode": row_test_mode,
-                        "Measurement": 1,
-                        "Torque_Check": 0,
-                        "Notes": remarks if remarks else "",
-                        "ISFlowLimit": is_flow,
-                        "OBFlowLimit": ob_flow
-                    })
+            rows.append({
+                "Step": step,
+                "Row_Type": "PROCESS",
+                "Speed_RPM": speed,
+                "Primary seal Gas Pressure (barg)": primary,
+                "Interspace_Pressure_bar": interspace,
+                "BackPressure_Drive_End_bar": bp_de,
+                "BackPressure_Non_Drive_End_bar": bp_nde,
+                "Gas_Injection_bar": 0,
+                "Duration_s": duration,
+                "Acceptance point": acceptance,
+                "Temperature_C": temp,
+                "Gas_Type": "Air",
+                "Test_Mode": row_test_mode,
+                "Measurement": 1,
+                "Torque_Check": 0,
+                "Notes": remarks if remarks else "",
+                "ISFlowLimit": is_flow,
+                "OBFlowLimit": ob_flow
+            })
 
     df = pd.DataFrame(rows)
 
@@ -250,7 +208,7 @@ def scan_spec_safe(file):
     try:
         return scan_spec(file)
     except Exception as e:
-        print(f"[WARN] Primary scan failed: {e}")
+        print(f"[WARN] Scan failed: {e}")
         return pd.DataFrame()
 
 # =========================
@@ -280,9 +238,9 @@ def save_raw(df, test_id):
         "Test_Mode": "test_mode",
         "Measurement": "measurement",
         "Torque_Check": "torque_check",
-        "Notes": "notes",
         "ISFlowLimit": "isflowlimit",
-        "OBFlowLimit": "obflowlimit"
+        "OBFlowLimit": "obflowlimit",
+          "Notes": "notes"
     })
 
     df.to_sql("raw_spec", engine, if_exists="append", index=False)
@@ -333,4 +291,4 @@ if __name__ == "__main__":
 
     export_tst(test_id)
 
-    print("✅ Done: TST CSV generated")
+    print("✅ Done")
