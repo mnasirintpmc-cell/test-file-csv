@@ -238,9 +238,9 @@ def save_raw(df, test_id):
         "Test_Mode": "test_mode",
         "Measurement": "measurement",
         "Torque_Check": "torque_check",
+        "Notes": "notes",
         "ISFlowLimit": "isflowlimit",
-        "OBFlowLimit": "obflowlimit",
-          "Notes": "notes"
+        "OBFlowLimit": "obflowlimit"
     })
 
     df.to_sql("raw_spec", engine, if_exists="append", index=False)
