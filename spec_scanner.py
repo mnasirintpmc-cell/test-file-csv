@@ -66,7 +66,7 @@ def build_column_map(header_row):
     return col_map
 
 # =========================
-# FLOW LIMIT EXTRACTION
+# FLOW LIMIT EXTRACTION (PATCHED)
 # =========================
 def extract_flow_limits(remarks):
     is_flow = None
@@ -75,8 +75,9 @@ def extract_flow_limits(remarks):
     if isinstance(remarks, str):
         text = remarks.lower()
 
-        ib_match = re.search(r"(i/?b.*?)(\d+\.?\d*)", text)
-        ob_match = re.search(r"(o/?b.*?)(\d+\.?\d*)", text)
+        # ---- SURGICAL FIX: safer regex ----
+        ib_match = re.search(r"(i\s*/?\s*b[^0-9]*)(\d+\.?\d*)", text)
+        ob_match = re.search(r"(o\s*/?\s*b[^0-9]*)(\d+\.?\d*)", text)
 
         if ib_match:
             is_flow = to_float(ib_match.group(2))
@@ -132,20 +133,42 @@ def scan_spec(file):
                     speed = to_float(safe_get(row, step_col+3))
                     temp = safe_get(row, step_col+4)
                     hold = to_float(safe_get(row, step_col+5))
+
+                    # =========================
+                    # REMARKS (SURGICAL FIX)
+                    # =========================
                     remarks = safe_get(row, step_col+8)
+
+                    if not isinstance(remarks, str) or remarks.strip() == "":
+                        
+                        # scan right side first
+                        for idx in range(step_col+1, len(row)):
+                            cell = row[idx]
+
+                            if isinstance(cell, str):
+                                txt = cell.lower()
+                                if "leak" in txt or "acceptance" in txt:
+                                    remarks = cell
+                                    break
+
+                        # fallback full row
+                        if not isinstance(remarks, str) or remarks.strip() == "":
+                            for cell in row:
+                                if isinstance(cell, str):
+                                    if "leak" in cell.lower():
+                                        remarks = cell
+                                        break
 
                     # =========================
                     # TEST MODE (ITERATED FIX)
                     # =========================
                     row_test_mode = 1
 
-                    # original logic
                     if isinstance(primary_cell, str) and "secondary" in primary_cell.lower():
                         row_test_mode = 2
 
                     primary_val = to_float(primary_cell)
 
-                    # new logic (data-driven)
                     if secondary is not None and primary_val in [None, 0]:
                         row_test_mode = 2
 
@@ -184,6 +207,13 @@ def scan_spec(file):
                     # FLOW LIMITS
                     # =========================
                     is_flow, ob_flow = extract_flow_limits(remarks)
+
+                    # ---- DEBUG (temporary) ----
+                    if step == 56:
+                        print("\n--- DEBUG STEP 56 ---")
+                        print("ROW:", row)
+                        print("REMARKS:", remarks)
+                        print("IS:", is_flow, "OB:", ob_flow)
 
                     rows.append({
                         "Step": step,
@@ -231,7 +261,6 @@ def save_raw(df, test_id):
     df = df.copy()
     df["test_id"] = test_id
 
-    # prevent duplicates
     with engine.begin() as conn:
         conn.execute(text(f"DELETE FROM raw_spec WHERE test_id = '{test_id}'"))
 
