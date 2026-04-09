@@ -4,3 +4,5 @@ xlsxwriter>=3.1
 openpyxl>=3.1
 pyxlsb>=1.0
 numpy
+sqlalchemy
+psycopg2-binary
