@@ -30,7 +30,6 @@ def _detect_engine(file):
 
     if hasattr(file, "name"):
         name = file.name.lower()
-
     elif isinstance(file, str):
         name = file.lower()
 
@@ -53,14 +52,14 @@ def scan_spec(file):
             engine=engine,
             sheet_name=None,
             header=None,
-            engine_kwargs={"data_only": True}
+            engine_kwargs={"data_only": True},
         )
     else:
         sheets = pd.read_excel(
             file,
             engine=engine,
             sheet_name=None,
-            header=None
+            header=None,
         )
 
     rows = []
@@ -81,10 +80,9 @@ def scan_spec(file):
 
                 step_col = j
 
-                for k in range(i+1, len(df)):
+                for k in range(i + 1, len(df)):
 
                     row = df.iloc[k].tolist()
-
                     step_val = safe_get(row, step_col)
 
                     if step_val is None:
@@ -98,12 +96,12 @@ def scan_spec(file):
                     except:
                         continue
 
-                    primary_cell = safe_get(row, step_col+1)
-                    secondary = to_float(safe_get(row, step_col+2))
-                    speed = to_float(safe_get(row, step_col+3))
-                    temp = safe_get(row, step_col+4)
-                    hold = to_float(safe_get(row, step_col+5))
-                    remarks = safe_get(row, step_col+8)
+                    primary_cell = safe_get(row, step_col + 1)
+                    secondary = to_float(safe_get(row, step_col + 2))
+                    speed = to_float(safe_get(row, step_col + 3))
+                    temp = safe_get(row, step_col + 4)
+                    hold = to_float(safe_get(row, step_col + 5))
+                    remarks = safe_get(row, step_col + 8)
 
                     # -------------------------------
                     # TEST MODE DETECTION
@@ -123,7 +121,10 @@ def scan_spec(file):
                     # -------------------------------
                     # PRIMARY
                     # -------------------------------
-                    if isinstance(primary_cell, str) and "secondary" in primary_cell.lower():
+                    if (
+                        isinstance(primary_cell, str)
+                        and "secondary" in primary_cell.lower()
+                    ):
                         primary = secondary + 10 if secondary is not None else None
                     else:
                         primary = to_float(primary_cell)
@@ -167,33 +168,38 @@ def scan_spec(file):
                     # SURGICAL FIX: FILTER GHOST / EMPTY STEPS
                     # ==========================================
                     is_empty_row = (
-                        (speed is None or speed == 0) and
-                        (primary is None or primary == 0) and
-                        (secondary is None or secondary == 0) and
-                        (hold is None or hold == 0) and
-                        (not isinstance(remarks, str) or remarks.strip() == "")
+                        (speed is None or speed == 0)
+                        and (primary is None or primary == 0)
+                        and (secondary is None or secondary == 0)
+                        and (hold is None or hold == 0)
+                        and (
+                            not isinstance(remarks, str)
+                            or remarks.strip() == ""
+                        )
                     )
 
                     if is_empty_row:
                         continue
 
-                    rows.append({
-                        "Step": step,
-                        "Speed_RPM": speed,
-                        "Primary seal Gas Pressure (barg)": primary,
-                        "Interspace_Pressure_bar": interspace,
-                        "BackPressure_Drive_End_bar": bp_de,
-                        "BackPressure_Non_Drive_End_bar": bp_nde,
-                        "Gas_Injection_bar": 0,
-                        "Duration_s": duration,
-                        "Acceptance point": acceptance,
-                        "Temperature_C": temp,
-                        "Gas_Type": "Air",
-                        "Test_Mode": row_test_mode,
-                        "Measurement": 1,
-                        "Torque_Check": 0,
-                        "Notes": remarks if remarks else ""
-                    })
+                    rows.append(
+                        {
+                            "Step": step,
+                            "Speed_RPM": speed,
+                            "Primary seal Gas Pressure (barg)": primary,
+                            "Interspace_Pressure_bar": interspace,
+                            "BackPressure_Drive_End_bar": bp_de,
+                            "BackPressure_Non_Drive_End_bar": bp_nde,
+                            "Gas_Injection_bar": 0,
+                            "Duration_s": duration,
+                            "Acceptance point": acceptance,
+                            "Temperature_C": temp,
+                            "Gas_Type": "Air",
+                            "Test_Mode": row_test_mode,
+                            "Measurement": 1,
+                            "Torque_Check": 0,
+                            "Notes": remarks if remarks else "",
+                        }
+                    )
 
     df = pd.DataFrame(rows)
 
@@ -213,22 +219,47 @@ def scan_spec(file):
                     val_base = base[col]
                     val_new = row[col]
 
-                    # Keep existing valid value
                     if pd.notna(val_base) and val_base not in [0, "", None]:
                         continue
 
-                    # Replace only if new value is meaningful
                     if pd.notna(val_new) and val_new not in [0, "", None]:
                         base[col] = val_new
 
             return base
 
         df = (
-            df
-            .sort_values("Step")
+            df.sort_values("Step")
             .groupby("Step", as_index=False)
             .apply(merge_rows)
             .reset_index(drop=True)
         )
+
+    # =====================================================
+    # ✅ Extract Maximum Leakage Limits (Inboard & Outboard)
+    # =====================================================
+    max_inboard = None
+    max_outboard = None
+
+    for sheet_name, df_sheet in sheets.items():
+        if df_sheet is None or df_sheet.empty:
+            continue
+
+        for i in range(len(df_sheet)):
+            for j in range(len(df_sheet.columns)):
+                cell_val = str(df_sheet.iloc[i, j]).strip().lower()
+                if "max leakage" in cell_val:
+                    next_val = (
+                        str(df_sheet.iloc[i, j + 1])
+                        if j + 1 < len(df_sheet.columns)
+                        else ""
+                    )
+                    num_val = pd.to_numeric(next_val, errors="coerce")
+                    if "inboard" in cell_val:
+                        max_inboard = num_val
+                    elif "outboard" in cell_val:
+                        max_outboard = num_val
+
+    df["ISFlowLimits"] = max_inboard if max_inboard is not None else None
+    df["OBFlowLimits"] = max_outboard if max_outboard is not None else None
 
     return df
