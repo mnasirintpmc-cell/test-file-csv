@@ -40,7 +40,7 @@ def _detect_engine(file):
 
 
 def scan_spec(file):
-    """Parse specification → dataframe of steps, with flow limits and accurate test‑mode detection."""
+    """Parse specification → dataframe of steps, including inboard/outboard leakage columns."""
 
     engine = _detect_engine(file)
 
@@ -69,6 +69,16 @@ def scan_spec(file):
 
                 step_col = j
 
+                # --- detect any "max leak" columns in the same header row ---
+                header_row = [str(x).lower() for x in list(df.iloc[i])]
+                leak_cols = {}
+                for idx, txt in enumerate(header_row):
+                    if "leak" in txt and "max" in txt:
+                        if any(k in txt for k in ["i", "inb", "inboard"]):
+                            leak_cols["in"] = idx
+                        elif any(k in txt for k in ["o", "outb", "outboard"]):
+                            leak_cols["out"] = idx
+
                 for k in range(i + 1, len(df)):
                     row = df.iloc[k].tolist()
                     step_val = safe_get(row, step_col)
@@ -90,25 +100,16 @@ def scan_spec(file):
                     remarks = safe_get(row, step_col + 8)
 
                     # =====================================================
-                    # 🔍 TEST MODE DETECTION (refined & safe)
+                    # TEST MODE DETECTION (safe)
                     # =====================================================
                     row_test_mode = 1
-
                     prim_str = str(primary_cell).lower() if isinstance(primary_cell, str) else ""
-                    sec_colname = ""
+                    sec_colname = str(df.iloc[i - 1, step_col + 2]).lower() if i > 0 and step_col + 2 < df.shape[1] else ""
 
-                    # look up header row (above “Test Step”) for context keywords
-                    if i > 0:
-                        header_row = list(df.iloc[i - 1])
-                        if step_col + 2 < len(header_row):
-                            sec_colname = str(header_row[step_col + 2]).lower()
-
-                    # case 1 – explicit textual indicators
                     if any(k in prim_str for k in ["sec", "secondary", "inboard", "outboard"]):
                         row_test_mode = 2
                     elif any(k in sec_colname for k in ["sec", "secondary"]):
                         row_test_mode = 2
-                    # case 2 – numeric heuristic: only when primary blank/zero and secondary > 0
                     elif (to_float(primary_cell) in [None, 0]) and (secondary not in [None, 0]) and str(primary_cell).strip() == "":
                         row_test_mode = 2
 
@@ -123,29 +124,14 @@ def scan_spec(file):
                         primary = secondary + 10
 
                     # =====================================================
-                    # TEMPERATURE NORMALIZATION
+                    # TEMPERATURE
                     # =====================================================
                     if isinstance(temp, str) and temp.strip().upper() == "AMB":
                         temp = 60
 
-                    # =====================================================
-                    # DURATION / HOLD
-                    # =====================================================
                     duration = float(hold) if hold not in [None, ""] else 0
+                    acceptance = 1 if isinstance(remarks, str) and "acceptance" in remarks.lower() else 0
 
-                    # =====================================================
-                    # ACCEPTANCE FLAG
-                    # =====================================================
-                    acceptance = (
-                        1
-                        if isinstance(remarks, str)
-                        and "acceptance" in remarks.lower()
-                        else 0
-                    )
-
-                    # =====================================================
-                    # PRESSURE MAPPING
-                    # =====================================================
                     interspace = 0
                     bp_de = 0
                     bp_nde = 0
@@ -155,9 +141,15 @@ def scan_spec(file):
                     else:
                         interspace = secondary
 
-                    # =====================================================
-                    # FILTER EMPTY ROWS
-                    # =====================================================
+                    # --- capture max leak columns if present ---
+                    inboard_leak = None
+                    outboard_leak = None
+                    if "in" in leak_cols:
+                        inboard_leak = to_float(safe_get(row, leak_cols["in"]))
+                    if "out" in leak_cols:
+                        outboard_leak = to_float(safe_get(row, leak_cols["out"]))
+
+                    # Skip empty rows
                     is_empty_row = (
                         (speed in [None, 0])
                         and (primary in [None, 0])
@@ -185,13 +177,15 @@ def scan_spec(file):
                             "Measurement": 1,
                             "Torque_Check": 0,
                             "Notes": remarks if remarks else "",
+                            "ISFlowLimits": inboard_leak,
+                            "OBFlowLimits": outboard_leak,
                         }
                     )
 
     df = pd.DataFrame(rows)
 
     # =====================================================
-    # MERGE DUPLICATE STEPS (existing logic)
+    # DEDUPLICATE STEPS
     # =====================================================
     if not df.empty:
 
@@ -212,40 +206,5 @@ def scan_spec(file):
             .apply(merge_rows)
             .reset_index(drop=True)
         )
-
-    # =====================================================
-    # 🔍 PARSE MAX LEAKAGE INBOARD / OUTBOARD
-    # =====================================================
-    max_inboard = None
-    max_outboard = None
-    for sheet_name, df_sheet in sheets.items():
-        if df_sheet is None or df_sheet.empty:
-            continue
-        for i in range(len(df_sheet)):
-            for j in range(len(df_sheet.columns)):
-                text = str(df_sheet.iloc[i, j]).strip().lower()
-                if not text:
-                    continue
-                if "max" in text and "leakage" in text:
-                    # check same and next cell for numeric
-                    candidates = [text]
-                    if j + 1 < len(df_sheet.columns):
-                        candidates.append(str(df_sheet.iloc[i, j + 1]))
-                    for cand in candidates:
-                        m = re.search(r"([-+]?\d*\.?\d+)", cand)
-                        if m:
-                            val = float(m.group(1))
-                            if "inboard" in text:
-                                max_inboard = val
-                            elif "outboard" in text:
-                                max_outboard = val
-
-    # replicate across rows so Excel/CSV show the values
-    df["ISFlowLimits"] = (
-        [max_inboard] * len(df) if max_inboard is not None else [None] * len(df)
-    )
-    df["OBFlowLimits"] = (
-        [max_outboard] * len(df) if max_outboard is not None else [None] * len(df)
-    )
 
     return df
