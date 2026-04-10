@@ -15,7 +15,7 @@ from validator import validate_sequence
 
 def safe_read_csv(file_path_or_buffer):
 
-    encodings = ["utf-8","latin-1","cp1252","iso-8859-1"]
+    encodings = ["utf-8", "latin-1", "cp1252", "iso-8859-1"]
 
     for enc in encodings:
         try:
@@ -33,16 +33,15 @@ def safe_read_csv(file_path_or_buffer):
 
 
 # =====================================================
-# BUILD MACHINE CSV  ✅ FIXED
+# BUILD MACHINE CSV (extended with FlowLimits)
 # =====================================================
 
 def build_machine_csv(df):
 
     df = df.copy()
 
-    # --- SAFE COLUMN ACCESS (NO FAKE VALUES) ---
     def safe_col(name):
-        return df[name] if name in df.columns else pd.Series([np.nan]*len(df))
+        return df[name] if name in df.columns else pd.Series([np.nan] * len(df))
 
     machine_df = pd.DataFrame({
 
@@ -58,42 +57,41 @@ def build_machine_csv(df):
         "TST_GasType": safe_col("Gas_Type"),
         "TST_TestMode": safe_col("Test_Mode"),
         "TST_MeasurementReq": safe_col("Measurement"),
-        "TST_TorqueCheck": safe_col("Torque_Check")
-
+        "TST_TorqueCheck": safe_col("Torque_Check"),
     })
 
+    # --- Add Flow Limits if they exist ---
+    if "ISFlowLimits" in df.columns:
+        machine_df["TST_ISFlowLimits"] = df["ISFlowLimits"]
+    if "OBFlowLimits" in df.columns:
+        machine_df["TST_OBFlowLimits"] = df["OBFlowLimits"]
+
     numeric_cols = [
-        "TST_SpeedDem","TST_CellPresDemand","TST_InterPresDemand",
-        "TST_InterBPDemand_DE","TST_InterBPDemand_NDE",
-        "TST_GasInjectionDemand","TST_StepDuration",
-        "TST_APFlag","TST_TempDemand",
-        "TST_TestMode","TST_MeasurementReq","TST_TorqueCheck"
+        "TST_SpeedDem", "TST_CellPresDemand", "TST_InterPresDemand",
+        "TST_InterBPDemand_DE", "TST_InterBPDemand_NDE",
+        "TST_GasInjectionDemand", "TST_StepDuration",
+        "TST_APFlag", "TST_TempDemand", "TST_TestMode",
+        "TST_MeasurementReq", "TST_TorqueCheck"
     ]
 
     for col in numeric_cols:
 
         series = machine_df[col].astype(str).str.strip()
 
-        # =============================
-        # TEMPERATURE SPECIAL LOGIC
-        # =============================
         if col == "TST_TempDemand":
 
-            series = series.replace({"AMB":"30","amb":"30"})
-
+            series = series.replace({"AMB": "30", "amb": "30"})
             greater_mask = series.str.contains(">", regex=False)
             less_mask = series.str.contains("<", regex=False)
 
             series = (
-                series
-                .str.replace("≥","",regex=False)
-                .str.replace(">=","",regex=False)
-                .str.replace("<=","",regex=False)
-                .str.replace(">","",regex=False)
-                .str.replace("<","",regex=False)
+                series.str.replace("≥", "", regex=False)
+                .str.replace(">=", "", regex=False)
+                .str.replace("<=", "", regex=False)
+                .str.replace(">", "", regex=False)
+                .str.replace("<", "", regex=False)
             )
 
-            # ✅ NO fillna(0)
             series = pd.to_numeric(series, errors="coerce")
 
             series.loc[greater_mask] = series.loc[greater_mask] + 1
@@ -104,15 +102,13 @@ def build_machine_csv(df):
         else:
 
             series = (
-                series
-                .str.replace("≥","",regex=False)
-                .str.replace(">=","",regex=False)
-                .str.replace("<=","",regex=False)
-                .str.replace(">","",regex=False)
-                .str.replace("<","",regex=False)
+                series.str.replace("≥", "", regex=False)
+                .str.replace(">=", "", regex=False)
+                .str.replace("<=", "", regex=False)
+                .str.replace(">", "", regex=False)
+                .str.replace("<", "", regex=False)
             )
 
-            # ✅ NO fillna(0)
             machine_df[col] = pd.to_numeric(series, errors="coerce")
 
     machine_df["TST_GasType"] = machine_df["TST_GasType"].fillna("Air")
@@ -128,92 +124,86 @@ def build_machine_csv(df):
 
 
 # =====================================================
-# REST OF YOUR CODE (UNCHANGED)
+# REST OF YOUR CODE (unchanged)
 # =====================================================
 
 def detect_file_type(df):
-
     cols = df.columns.tolist()
-
     if "TST_CellPresDemand" in cols or "Primary seal Gas Pressure (barg)" in cols:
         return "main_seal"
-
     return "unknown"
 
 
 def get_column_mapping():
-
     return {
-        "TST_SpeedDem":"Speed_RPM",
-        "TST_CellPresDemand":"Primary seal Gas Pressure (barg)",
-        "TST_InterPresDemand":"Interspace_Pressure_bar",
-        "TST_InterBPDemand_DE":"BackPressure_Drive_End_bar",
-        "TST_InterBPDemand_NDE":"BackPressure_Non_Drive_End_bar",
-        "TST_GasInjectionDemand":"Gas_Injection_bar",
-        "TST_StepDuration":"Duration_s",
-        "TST_APFlag":"Acceptance point",
-        "TST_TempDemand":"Temperature_C",
-        "TST_GasType":"Gas_Type",
-        "TST_TestMode":"Test_Mode",
-        "TST_MeasurementReq":"Measurement",
-        "TST_TorqueCheck":"Torque_Check"
+        "TST_SpeedDem": "Speed_RPM",
+        "TST_CellPresDemand": "Primary seal Gas Pressure (barg)",
+        "TST_InterPresDemand": "Interspace_Pressure_bar",
+        "TST_InterBPDemand_DE": "BackPressure_Drive_End_bar",
+        "TST_InterBPDemand_NDE": "BackPressure_Non_Drive_End_bar",
+        "TST_GasInjectionDemand": "Gas_Injection_bar",
+        "TST_StepDuration": "Duration_s",
+        "TST_APFlag": "Acceptance point",
+        "TST_TempDemand": "Temperature_C",
+        "TST_GasType": "Gas_Type",
+        "TST_TestMode": "Test_Mode",
+        "TST_MeasurementReq": "Measurement",
+        "TST_TorqueCheck": "Torque_Check",
     }
 
 
-def create_professional_excel_from_data(df,file_type,user_name="",source_name=""):
+def create_professional_excel_from_data(df, file_type, user_name="", source_name=""):
 
-    df = df.replace({np.nan:""})
+    df = df.replace({np.nan: ""})
     output = io.BytesIO()
 
-    logo_path = os.path.join(os.path.dirname(__file__),"company_logo.png")
+    logo_path = os.path.join(os.path.dirname(__file__), "company_logo.png")
 
-    with pd.ExcelWriter(output,engine="xlsxwriter") as writer:
+    with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
 
-        df.to_excel(writer,sheet_name="TEST_SEQUENCE",index=False)
+        df.to_excel(writer, sheet_name="TEST_SEQUENCE", index=False)
 
         wb = writer.book
         ws = writer.sheets["TEST_SEQUENCE"]
 
         header = wb.add_format({
-            "bold":True,"align":"center","border":1,
-            "fg_color":"#366092","font_color":"white"
+            "bold": True, "align": "center", "border": 1,
+            "fg_color": "#366092", "font_color": "white"
         })
 
-        cell = wb.add_format({"border":1,"align":"center"})
-        notes = wb.add_format({"border":1,"align":"left"})
+        cell = wb.add_format({"border": 1, "align": "center"})
+        notes = wb.add_format({"border": 1, "align": "left"})
 
-        for c,col in enumerate(df.columns):
-            ws.write(0,c,col,header)
+        for c, col in enumerate(df.columns):
+            ws.write(0, c, col, header)
 
-        for r in range(1,len(df)+1):
-            for c,col in enumerate(df.columns):
-                val = df.iloc[r-1,c]
+        for r in range(1, len(df) + 1):
+            for c, col in enumerate(df.columns):
+                val = df.iloc[r - 1, c]
                 if pd.isna(val):
                     val = ""
-                ws.write(r,c,val,notes if col=="Notes" else cell)
+                ws.write(r, c, val, notes if col == "Notes" else cell)
 
-        ws.set_column(0,len(df.columns)-1,18)
+        ws.set_column(0, len(df.columns) - 1, 18)
 
         instr = wb.add_worksheet("INSTRUCTIONS")
 
         if os.path.exists(logo_path):
-            instr.set_row(0,120)
-            instr.insert_image("A1",logo_path,{"x_scale":0.6,"y_scale":0.6})
+            instr.set_row(0, 120)
+            instr.insert_image("A1", logo_path, {"x_scale": 0.6, "y_scale": 0.6})
 
-        instr.write(10,1,f"Operator: {user_name}")
-        instr.write(11,1,f"Source File: {source_name}")
-        instr.write(12,1,"SEAL TEST SEQUENCE")
-        instr.write(14,1,"1. Edit sequence as required")
-        instr.write(15,1,"2. Maintain safe pressure relationships")
-        instr.write(16,1,"3. Upload file back to system")
+        instr.write(10, 1, f"Operator: {user_name}")
+        instr.write(11, 1, f"Source File: {source_name}")
+        instr.write(12, 1, "SEAL TEST SEQUENCE")
+        instr.write(14, 1, "1. Edit sequence as required")
+        instr.write(15, 1, "2. Maintain safe pressure relationships")
+        instr.write(16, 1, "3. Upload file back to system")
 
         instr.protect()
 
     output.seek(0)
     return output
 
-
-# (editable_dataframe + main unchanged from your version)
 
 def editable_dataframe(df):
 
@@ -230,10 +220,8 @@ def editable_dataframe(df):
 
             if not new_col.startswith("TST_"):
                 st.warning("Column must start with TST_")
-
             elif new_col in st.session_state.master_df.columns:
                 st.warning("Column already exists")
-
             else:
                 st.session_state.master_df[new_col] = 0
                 st.success(f"{new_col} added")
@@ -283,21 +271,19 @@ def main():
 
     operation = st.sidebar.radio(
         "Operation",
-        ["CSV → Excel","Excel → CSV","Spec → Technician Excel"]
+        ["CSV → Excel", "Excel → CSV", "Spec → Technician Excel"]
     )
 
-    if operation=="CSV → Excel":
+    if operation == "CSV → Excel":
 
-        uploaded = st.file_uploader("Upload Machine CSV",type=["csv"])
+        uploaded = st.file_uploader("Upload Machine CSV", type=["csv"])
 
         if uploaded:
 
             df = safe_read_csv(uploaded)
 
             excel = create_professional_excel_from_data(
-                df,"main_seal",
-                user_name=user_name,
-                source_name=uploaded.name
+                df, "main_seal", user_name=user_name, source_name=uploaded.name
             )
 
             st.download_button(
@@ -306,14 +292,13 @@ def main():
                 file_name="technician_sequence.xlsx"
             )
 
-    elif operation=="Excel → CSV":
+    elif operation == "Excel → CSV":
 
-        uploaded = st.file_uploader("Upload Technician Excel",type=["xlsx"])
+        uploaded = st.file_uploader("Upload Technician Excel", type=["xlsx"])
 
         if uploaded:
 
             df = pd.read_excel(uploaded)
-
             file_hash = hashlib.md5(uploaded.getvalue()).hexdigest()
 
             if st.session_state.last_uploaded_file != file_hash:
@@ -321,7 +306,6 @@ def main():
                 st.session_state.last_uploaded_file = file_hash
 
             edited = editable_dataframe(df)
-
             machine_df = build_machine_csv(edited)
 
             st.download_button(
@@ -330,17 +314,15 @@ def main():
                 file_name="machine_sequence.csv"
             )
 
-    elif operation=="Spec → Technician Excel":
+    elif operation == "Spec → Technician Excel":
 
         uploaded = st.file_uploader(
-            "Upload Spec (.xlsb, .xlsm, .xlsx)",
-            type=["xlsb","xlsm","xlsx"]
+            "Upload Spec (.xlsb, .xlsm, .xlsx)", type=["xlsb", "xlsm", "xlsx"]
         )
 
         if uploaded:
 
             spec_df = scan_spec(uploaded)
-
             file_hash = hashlib.md5(uploaded.getvalue()).hexdigest()
 
             if st.session_state.last_uploaded_file != file_hash:
@@ -363,5 +345,5 @@ def main():
             )
 
 
-if __name__=="__main__":
+if __name__ == "__main__":
     main()
