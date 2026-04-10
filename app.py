@@ -4,7 +4,6 @@ import numpy as np
 import io
 import os
 import hashlib
-from datetime import datetime
 from spec_scanner import scan_spec
 from validator import validate_sequence
 
@@ -19,11 +18,7 @@ def safe_read_csv(file_path_or_buffer):
 
     for enc in encodings:
         try:
-            df = pd.read_csv(
-                file_path_or_buffer,
-                delimiter=";",
-                encoding=enc
-            )
+            df = pd.read_csv(file_path_or_buffer, delimiter=";", encoding=enc)
             return df
         except:
             continue
@@ -33,7 +28,7 @@ def safe_read_csv(file_path_or_buffer):
 
 
 # =====================================================
-# BUILD MACHINE CSV (extended with FlowLimits)
+# BUILD MACHINE CSV with FlowLimits mapping
 # =====================================================
 
 def build_machine_csv(df):
@@ -44,7 +39,6 @@ def build_machine_csv(df):
         return df[name] if name in df.columns else pd.Series([np.nan] * len(df))
 
     machine_df = pd.DataFrame({
-
         "TST_SpeedDem": safe_col("Speed_RPM"),
         "TST_CellPresDemand": safe_col("Primary seal Gas Pressure (barg)"),
         "TST_InterPresDemand": safe_col("Interspace_Pressure_bar"),
@@ -69,9 +63,8 @@ def build_machine_csv(df):
     numeric_cols = [
         "TST_SpeedDem", "TST_CellPresDemand", "TST_InterPresDemand",
         "TST_InterBPDemand_DE", "TST_InterBPDemand_NDE",
-        "TST_GasInjectionDemand", "TST_StepDuration",
-        "TST_APFlag", "TST_TempDemand", "TST_TestMode",
-        "TST_MeasurementReq", "TST_TorqueCheck"
+        "TST_GasInjectionDemand", "TST_StepDuration", "TST_APFlag",
+        "TST_TempDemand", "TST_TestMode", "TST_MeasurementReq", "TST_TorqueCheck"
     ]
 
     for col in numeric_cols:
@@ -93,14 +86,11 @@ def build_machine_csv(df):
             )
 
             series = pd.to_numeric(series, errors="coerce")
-
             series.loc[greater_mask] = series.loc[greater_mask] + 1
             series.loc[less_mask] = series.loc[less_mask] - 1
-
             machine_df[col] = series
 
         else:
-
             series = (
                 series.str.replace("≥", "", regex=False)
                 .str.replace(">=", "", regex=False)
@@ -108,14 +98,12 @@ def build_machine_csv(df):
                 .str.replace(">", "", regex=False)
                 .str.replace("<", "", regex=False)
             )
-
             machine_df[col] = pd.to_numeric(series, errors="coerce")
 
     machine_df["TST_GasType"] = machine_df["TST_GasType"].fillna("Air")
 
-    # Preserve extra TST columns
+    # preserve extra TST columns
     extra_cols = [col for col in df.columns if col.startswith("TST_")]
-
     for col in extra_cols:
         if col not in machine_df.columns:
             machine_df[col] = df[col]
@@ -124,7 +112,7 @@ def build_machine_csv(df):
 
 
 # =====================================================
-# REST OF YOUR CODE (unchanged)
+# SUPPORTING MAPPINGS
 # =====================================================
 
 def detect_file_type(df):
@@ -152,17 +140,28 @@ def get_column_mapping():
     }
 
 
+# =====================================================
+# EXCEL CREATOR – ensures FlowLimits visible columns
+# =====================================================
+
 def create_professional_excel_from_data(df, file_type, user_name="", source_name=""):
 
     df = df.replace({np.nan: ""})
-    output = io.BytesIO()
 
+    # ensure columns exist and visible
+    if "ISFlowLimits" in df.columns or "OBFlowLimits" in df.columns:
+        base_cols = df.columns.tolist()
+        for col in ["ISFlowLimits", "OBFlowLimits"]:
+            if col not in base_cols:
+                df[col] = ""
+        if not base_cols[-2:] == ["ISFlowLimits", "OBFlowLimits"]:
+            df = df[[c for c in base_cols if c not in ["ISFlowLimits", "OBFlowLimits"]] + ["ISFlowLimits", "OBFlowLimits"]]
+
+    output = io.BytesIO()
     logo_path = os.path.join(os.path.dirname(__file__), "company_logo.png")
 
     with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
-
         df.to_excel(writer, sheet_name="TEST_SEQUENCE", index=False)
-
         wb = writer.book
         ws = writer.sheets["TEST_SEQUENCE"]
 
@@ -170,7 +169,6 @@ def create_professional_excel_from_data(df, file_type, user_name="", source_name
             "bold": True, "align": "center", "border": 1,
             "fg_color": "#366092", "font_color": "white"
         })
-
         cell = wb.add_format({"border": 1, "align": "center"})
         notes = wb.add_format({"border": 1, "align": "left"})
 
@@ -205,6 +203,10 @@ def create_professional_excel_from_data(df, file_type, user_name="", source_name
     return output
 
 
+# =====================================================
+# EDITABLE STREAMLIT DF
+# =====================================================
+
 def editable_dataframe(df):
 
     if st.session_state.master_df is None:
@@ -215,9 +217,7 @@ def editable_dataframe(df):
     if st.button("Add Column"):
 
         if new_col:
-
             new_col = new_col.strip()
-
             if not new_col.startswith("TST_"):
                 st.warning("Column must start with TST_")
             elif new_col in st.session_state.master_df.columns:
@@ -230,25 +230,21 @@ def editable_dataframe(df):
         st.session_state.master_df.copy(),
         use_container_width=True,
         key="data_editor",
-        num_rows="dynamic"
+        num_rows="dynamic",
     )
 
     master = st.session_state.master_df.copy()
-
     for col in edited.columns:
         if col not in master.columns:
             master[col] = edited[col]
-
     for col in master.columns:
         if col not in edited.columns:
             edited[col] = master[col]
-
     edited = edited[master.columns]
 
     st.session_state.master_df = edited.copy()
 
     warnings = validate_sequence(edited)
-
     if warnings:
         st.error("Safety interlock violations detected")
         for w in warnings:
@@ -257,13 +253,15 @@ def editable_dataframe(df):
     return edited
 
 
-def main():
+# =====================================================
+# MAIN STREAMLIT APP
+# =====================================================
 
+def main():
     st.title("⚙️ DGS Test Manager")
 
     if "master_df" not in st.session_state:
         st.session_state.master_df = None
-
     if "last_uploaded_file" not in st.session_state:
         st.session_state.last_uploaded_file = None
 
@@ -275,17 +273,12 @@ def main():
     )
 
     if operation == "CSV → Excel":
-
         uploaded = st.file_uploader("Upload Machine CSV", type=["csv"])
-
         if uploaded:
-
             df = safe_read_csv(uploaded)
-
             excel = create_professional_excel_from_data(
                 df, "main_seal", user_name=user_name, source_name=uploaded.name
             )
-
             st.download_button(
                 "Download Excel",
                 excel.getvalue(),
@@ -293,21 +286,15 @@ def main():
             )
 
     elif operation == "Excel → CSV":
-
         uploaded = st.file_uploader("Upload Technician Excel", type=["xlsx"])
-
         if uploaded:
-
             df = pd.read_excel(uploaded)
             file_hash = hashlib.md5(uploaded.getvalue()).hexdigest()
-
             if st.session_state.last_uploaded_file != file_hash:
                 st.session_state.master_df = df.copy()
                 st.session_state.last_uploaded_file = file_hash
-
             edited = editable_dataframe(df)
             machine_df = build_machine_csv(edited)
-
             st.download_button(
                 "Download Machine CSV",
                 machine_df.to_csv(index=False, sep=";"),
@@ -315,29 +302,19 @@ def main():
             )
 
     elif operation == "Spec → Technician Excel":
-
         uploaded = st.file_uploader(
             "Upload Spec (.xlsb, .xlsm, .xlsx)", type=["xlsb", "xlsm", "xlsx"]
         )
-
         if uploaded:
-
             spec_df = scan_spec(uploaded)
             file_hash = hashlib.md5(uploaded.getvalue()).hexdigest()
-
             if st.session_state.last_uploaded_file != file_hash:
                 st.session_state.master_df = spec_df.copy()
                 st.session_state.last_uploaded_file = file_hash
-
             edited = editable_dataframe(spec_df)
-
             excel = create_professional_excel_from_data(
-                edited,
-                "main_seal",
-                user_name=user_name,
-                source_name=uploaded.name
+                edited, "main_seal", user_name=user_name, source_name=uploaded.name
             )
-
             st.download_button(
                 "Download Technician Excel",
                 excel.getvalue(),
