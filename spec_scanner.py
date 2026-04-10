@@ -254,12 +254,21 @@ def scan_spec(file):
                         else ""
                     )
                     num_val = pd.to_numeric(next_val, errors="coerce")
+                    if pd.isna(num_val):
+                        import re
+                        match = re.search(r"([\d\.]+)", str(next_val))
+                        if match:
+                            num_val = float(match.group(1))
                     if "inboard" in cell_val:
                         max_inboard = num_val
                     elif "outboard" in cell_val:
                         max_outboard = num_val
 
-    df["ISFlowLimits"] = max_inboard if max_inboard is not None else None
-    df["OBFlowLimits"] = max_outboard if max_outboard is not None else None
+    df["ISFlowLimits"] = (
+        [max_inboard] * len(df) if max_inboard is not None else [None] * len(df)
+    )
+    df["OBFlowLimits"] = (
+        [max_outboard] * len(df) if max_outboard is not None else [None] * len(df)
+    )
 
     return df
