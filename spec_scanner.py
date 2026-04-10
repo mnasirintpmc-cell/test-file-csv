@@ -1,4 +1,5 @@
 import pandas as pd
+import re
 
 try:
     import pyxlsb
@@ -25,9 +26,7 @@ def to_float(v):
 
 
 def _detect_engine(file):
-
     name = ""
-
     if hasattr(file, "name"):
         name = file.name.lower()
     elif isinstance(file, str):
@@ -35,14 +34,13 @@ def _detect_engine(file):
 
     if name.endswith(".xlsb"):
         return "pyxlsb"
-
     if name.endswith(".xlsx") or name.endswith(".xlsm"):
         return "openpyxl"
-
     return "openpyxl"
 
 
 def scan_spec(file):
+    """Parse specification → dataframe of steps, with flow limits and accurate test‑mode detection."""
 
     engine = _detect_engine(file)
 
@@ -55,39 +53,27 @@ def scan_spec(file):
             engine_kwargs={"data_only": True},
         )
     else:
-        sheets = pd.read_excel(
-            file,
-            engine=engine,
-            sheet_name=None,
-            header=None,
-        )
+        sheets = pd.read_excel(file, engine=engine, sheet_name=None, header=None)
 
     rows = []
 
     for sheet_name, df in sheets.items():
-
         if df is None or df.empty:
             continue
 
         for i in range(len(df)):
-
             for j in range(len(df.columns)):
-
                 cell = str(df.iloc[i, j]).strip().lower()
-
                 if cell != "test step":
                     continue
 
                 step_col = j
 
                 for k in range(i + 1, len(df)):
-
                     row = df.iloc[k].tolist()
                     step_val = safe_get(row, step_col)
-
                     if step_val is None:
                         continue
-
                     if "end of" in str(step_val).lower():
                         break
 
@@ -103,81 +89,82 @@ def scan_spec(file):
                     hold = to_float(safe_get(row, step_col + 5))
                     remarks = safe_get(row, step_col + 8)
 
-                    # -------------------------------
-                    # TEST MODE DETECTION
-                    # -------------------------------
+                    # =====================================================
+                    # 🔍 TEST MODE DETECTION (refined & safe)
+                    # =====================================================
                     row_test_mode = 1
 
-                    if isinstance(primary_cell, str):
-                        if "secondary" in primary_cell.lower():
-                            row_test_mode = 2
+                    prim_str = str(primary_cell).lower() if isinstance(primary_cell, str) else ""
+                    sec_colname = ""
 
-                    try:
-                        if float(primary_cell) == 0:
-                            row_test_mode = 1
-                    except:
-                        pass
+                    # look up header row (above “Test Step”) for context keywords
+                    if i > 0:
+                        header_row = list(df.iloc[i - 1])
+                        if step_col + 2 < len(header_row):
+                            sec_colname = str(header_row[step_col + 2]).lower()
 
-                    # -------------------------------
-                    # PRIMARY
-                    # -------------------------------
-                    if (
-                        isinstance(primary_cell, str)
-                        and "secondary" in primary_cell.lower()
-                    ):
+                    # case 1 – explicit textual indicators
+                    if any(k in prim_str for k in ["sec", "secondary", "inboard", "outboard"]):
+                        row_test_mode = 2
+                    elif any(k in sec_colname for k in ["sec", "secondary"]):
+                        row_test_mode = 2
+                    # case 2 – numeric heuristic: only when primary blank/zero and secondary > 0
+                    elif (to_float(primary_cell) in [None, 0]) and (secondary not in [None, 0]) and str(primary_cell).strip() == "":
+                        row_test_mode = 2
+
+                    # =====================================================
+                    # PRIMARY VALUE
+                    # =====================================================
+                    if isinstance(primary_cell, str) and "secondary" in primary_cell.lower():
                         primary = secondary + 10 if secondary is not None else None
                     else:
                         primary = to_float(primary_cell)
-
                     if primary is None and secondary is not None:
                         primary = secondary + 10
 
-                    # -------------------------------
-                    # TEMP
-                    # -------------------------------
-                    if isinstance(temp, str) and temp.upper() == "AMB":
+                    # =====================================================
+                    # TEMPERATURE NORMALIZATION
+                    # =====================================================
+                    if isinstance(temp, str) and temp.strip().upper() == "AMB":
                         temp = 60
 
-                    # -------------------------------
-                    # DURATION (minutes)
-                    # -------------------------------
+                    # =====================================================
+                    # DURATION / HOLD
+                    # =====================================================
                     duration = float(hold) if hold not in [None, ""] else 0
 
-                    # -------------------------------
-                    # ACCEPTANCE FIX (SURGICAL)
-                    # -------------------------------
-                    acceptance = 0
-                    if isinstance(remarks, str):
-                        if "acceptance" in remarks.lower():
-                            acceptance = 1
+                    # =====================================================
+                    # ACCEPTANCE FLAG
+                    # =====================================================
+                    acceptance = (
+                        1
+                        if isinstance(remarks, str)
+                        and "acceptance" in remarks.lower()
+                        else 0
+                    )
 
-                    # -------------------------------
+                    # =====================================================
                     # PRESSURE MAPPING
-                    # -------------------------------
+                    # =====================================================
                     interspace = 0
                     bp_de = 0
                     bp_nde = 0
-
                     if row_test_mode == 1:
                         bp_de = secondary
                         bp_nde = secondary
                     else:
                         interspace = secondary
 
-                    # ==========================================
-                    # SURGICAL FIX: FILTER GHOST / EMPTY STEPS
-                    # ==========================================
+                    # =====================================================
+                    # FILTER EMPTY ROWS
+                    # =====================================================
                     is_empty_row = (
-                        (speed is None or speed == 0)
-                        and (primary is None or primary == 0)
-                        and (secondary is None or secondary == 0)
-                        and (hold is None or hold == 0)
-                        and (
-                            not isinstance(remarks, str)
-                            or remarks.strip() == ""
-                        )
+                        (speed in [None, 0])
+                        and (primary in [None, 0])
+                        and (secondary in [None, 0])
+                        and (hold in [None, 0])
+                        and (not isinstance(remarks, str) or remarks.strip() == "")
                     )
-
                     if is_empty_row:
                         continue
 
@@ -204,27 +191,19 @@ def scan_spec(file):
     df = pd.DataFrame(rows)
 
     # =====================================================
-    # 🔥 SURGICAL FIX: STEP DEDUPLICATION (NO LOGIC REMOVED)
+    # MERGE DUPLICATE STEPS (existing logic)
     # =====================================================
     if not df.empty:
 
         def merge_rows(group):
-
             base = group.iloc[0].copy()
-
             for _, row in group.iterrows():
-
                 for col in group.columns:
-
-                    val_base = base[col]
-                    val_new = row[col]
-
-                    if pd.notna(val_base) and val_base not in [0, "", None]:
+                    vb, vn = base[col], row[col]
+                    if pd.notna(vb) and vb not in [0, "", None]:
                         continue
-
-                    if pd.notna(val_new) and val_new not in [0, "", None]:
-                        base[col] = val_new
-
+                    if pd.notna(vn) and vn not in [0, "", None]:
+                        base[col] = vn
             return base
 
         df = (
@@ -235,35 +214,33 @@ def scan_spec(file):
         )
 
     # =====================================================
-    # ✅ Extract Maximum Leakage Limits (Inboard & Outboard)
+    # 🔍 PARSE MAX LEAKAGE INBOARD / OUTBOARD
     # =====================================================
     max_inboard = None
     max_outboard = None
-
     for sheet_name, df_sheet in sheets.items():
         if df_sheet is None or df_sheet.empty:
             continue
-
         for i in range(len(df_sheet)):
             for j in range(len(df_sheet.columns)):
-                cell_val = str(df_sheet.iloc[i, j]).strip().lower()
-                if "max leakage" in cell_val:
-                    next_val = (
-                        str(df_sheet.iloc[i, j + 1])
-                        if j + 1 < len(df_sheet.columns)
-                        else ""
-                    )
-                    num_val = pd.to_numeric(next_val, errors="coerce")
-                    if pd.isna(num_val):
-                        import re
-                        match = re.search(r"([\d\.]+)", str(next_val))
-                        if match:
-                            num_val = float(match.group(1))
-                    if "inboard" in cell_val:
-                        max_inboard = num_val
-                    elif "outboard" in cell_val:
-                        max_outboard = num_val
+                text = str(df_sheet.iloc[i, j]).strip().lower()
+                if not text:
+                    continue
+                if "max" in text and "leakage" in text:
+                    # check same and next cell for numeric
+                    candidates = [text]
+                    if j + 1 < len(df_sheet.columns):
+                        candidates.append(str(df_sheet.iloc[i, j + 1]))
+                    for cand in candidates:
+                        m = re.search(r"([-+]?\d*\.?\d+)", cand)
+                        if m:
+                            val = float(m.group(1))
+                            if "inboard" in text:
+                                max_inboard = val
+                            elif "outboard" in text:
+                                max_outboard = val
 
+    # replicate across rows so Excel/CSV show the values
     df["ISFlowLimits"] = (
         [max_inboard] * len(df) if max_inboard is not None else [None] * len(df)
     )
