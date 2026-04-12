@@ -13,15 +13,13 @@ except ImportError:
 
 
 def safe_get(row, idx):
-    if idx < len(row):
-        return row[idx]
-    return None
+    return row[idx] if idx < len(row) else None
 
 
 def to_float(v):
     try:
         return float(v)
-    except:
+    except Exception:
         return None
 
 
@@ -40,17 +38,13 @@ def _detect_engine(file):
 
 
 def scan_spec(file):
-    """Parse specification → dataframe of steps, including Max P/S Leak and Max S/S Leak columns."""
+    """Parse specification → dataframe with pressures, leaks, and metadata."""
 
     engine = _detect_engine(file)
 
     if engine == "openpyxl":
         sheets = pd.read_excel(
-            file,
-            engine=engine,
-            sheet_name=None,
-            header=None,
-            engine_kwargs={"data_only": True},
+            file, engine=engine, sheet_name=None, header=None, engine_kwargs={"data_only": True}
         )
     else:
         sheets = pd.read_excel(file, engine=engine, sheet_name=None, header=None)
@@ -61,161 +55,154 @@ def scan_spec(file):
         if df is None or df.empty:
             continue
 
+        # --------------------------------------------------------------
+        # find the row where "Test Step" header lives (true header row)
+        # --------------------------------------------------------------
+        header_row_index = None
         for i in range(len(df)):
-            for j in range(len(df.columns)):
-                cell = str(df.iloc[i, j]).strip().lower()
-                if cell != "test step":
-                    continue
+            if any("test step" in str(x).lower() for x in df.iloc[i].tolist()):
+                header_row_index = i
+                break
+        if header_row_index is None:
+            continue
 
-                step_col = j
+        # lowercase header names
+        header_labels = [str(x).strip().lower() for x in df.iloc[header_row_index]]
 
-                # ---------------------------------------------------------
-                # detect "max leak" columns in the same header row
-                # ---------------------------------------------------------
-                header_row = [str(x).lower() for x in list(df.iloc[i])]
-                leak_cols = {}
+        # --------------------------------------------------------------
+        # locate known column indices
+        # --------------------------------------------------------------
+        col_step = next((idx for idx, c in enumerate(header_labels) if "test step" in c), None)
+        col_primary = next((idx for idx, c in enumerate(header_labels) if "primary" in c and "pressure" in c), None)
+        col_secondary = next((idx for idx, c in enumerate(header_labels) if "secondary" in c and "pressure" in c), None)
+        col_speed = next((idx for idx, c in enumerate(header_labels) if "speed" in c), None)
+        col_temp = next((idx for idx, c in enumerate(header_labels) if "temp" in c), None)
+        col_hold = next((idx for idx, c in enumerate(header_labels) if "hold" in c), None)
+        col_remarks = next((idx for idx, c in enumerate(header_labels) if "remark" in c), None)
 
-                for idx, txt in enumerate(header_row):
-                    if "leak" in txt and "max" in txt:
-                        txt_clean = txt.replace(" ", " ")  # normalize nbsp
-                        # P/S = primary/inboard
-                        if any(k in txt_clean for k in ["p/s", "ps ", "p s", "primary", "inb", "inboard", "cell"]):
-                            leak_cols["in"] = idx
-                        # S/S = secondary/outboard
-                        elif any(k in txt_clean for k in ["s/s", "ss ", "s s", "secondary", "outb", "outboard"]):
-                            leak_cols["out"] = idx
-                        elif "1" in txt_clean or "i/" in txt_clean:
-                            leak_cols["in"] = idx
-                        elif "2" in txt_clean or "o/" in txt_clean:
-                            leak_cols["out"] = idx
+        # --- detect leak columns (handles Max P/S Leak., Max S/S Leak.) ---
+        leak_cols = {}
+        for idx, txt in enumerate(header_labels):
+            if "leak" in txt and "max" in txt:
+                txt_clean = txt.replace(" ", " ")  # normalize nbsp
+                if any(k in txt_clean for k in ["p/s", "ps", "primary", "inb", "inboard"]):
+                    leak_cols["in"] = idx
+                elif any(k in txt_clean for k in ["s/s", "ss", "secondary", "outb", "outboard"]):
+                    leak_cols["out"] = idx
 
-                # ---------------------------------------------------------
-                # iterate data rows after the header
-                # ---------------------------------------------------------
-                for k in range(i + 1, len(df)):
-                    row = df.iloc[k].tolist()
-                    step_val = safe_get(row, step_col)
-                    if step_val is None:
-                        continue
-                    if "end of" in str(step_val).lower():
-                        break
+        # --------------------------------------------------------------
+        # iterate step rows below header until blank or "end of"
+        # --------------------------------------------------------------
+        for k in range(header_row_index + 1, len(df)):
+            row = df.iloc[k].tolist()
+            step_val = safe_get(row, col_step)
+            if step_val is None or str(step_val).strip() == "":
+                continue
+            if "end of" in str(step_val).lower():
+                break
 
-                    try:
-                        step = int(float(step_val))
-                    except:
-                        continue
+            try:
+                step = int(float(step_val))
+            except Exception:
+                continue
 
-                    primary_cell = safe_get(row, step_col + 1)
-                    secondary = to_float(safe_get(row, step_col + 2))
-                    speed = to_float(safe_get(row, step_col + 3))
-                    temp = safe_get(row, step_col + 4)
-                    hold = to_float(safe_get(row, step_col + 5))
-                    remarks = safe_get(row, step_col + 8)
+            primary_cell = safe_get(row, col_primary) if col_primary is not None else None
+            secondary = to_float(safe_get(row, col_secondary)) if col_secondary is not None else None
+            speed = to_float(safe_get(row, col_speed)) if col_speed is not None else None
+            temp = safe_get(row, col_temp) if col_temp is not None else None
+            hold = to_float(safe_get(row, col_hold)) if col_hold is not None else None
+            remarks = safe_get(row, col_remarks) if col_remarks is not None else ""
 
-                    # =====================================================
-                    # TEST MODE DETECTION
-                    # =====================================================
-                    row_test_mode = 1
-                    prim_str = str(primary_cell).lower() if isinstance(primary_cell, str) else ""
-                    sec_colname = (
-                        str(df.iloc[i - 1, step_col + 2]).lower()
-                        if i > 0 and step_col + 2 < df.shape[1]
-                        else ""
-                    )
-                    if any(k in prim_str for k in ["sec", "secondary", "inboard", "outboard"]):
-                        row_test_mode = 2
-                    elif any(k in sec_colname for k in ["sec", "secondary"]):
-                        row_test_mode = 2
-                    elif (to_float(primary_cell) in [None, 0]) and (secondary not in [None, 0]) and str(primary_cell).strip() == "":
-                        row_test_mode = 2
+            # -------------------------------
+            # TEST MODE
+            # -------------------------------
+            row_test_mode = 1
+            prim_str = str(primary_cell).lower() if isinstance(primary_cell, str) else ""
+            if any(k in prim_str for k in ["sec", "secondary", "inboard", "outboard"]):
+                row_test_mode = 2
+            elif (to_float(primary_cell) in [None, 0]) and (secondary not in [None, 0]) and str(primary_cell).strip() == "":
+                row_test_mode = 2
 
-                    # =====================================================
-                    # PRIMARY VALUE
-                    # =====================================================
-                    if isinstance(primary_cell, str) and "secondary" in primary_cell.lower():
-                        primary = secondary + 10 if secondary is not None else None
-                    else:
-                        primary = to_float(primary_cell)
-                    if primary is None and secondary is not None:
-                        primary = secondary + 10
+            # -------------------------------
+            # PRIMARY VALUE
+            # -------------------------------
+            if isinstance(primary_cell, str) and "secondary" in primary_cell.lower():
+                primary = secondary + 10 if secondary is not None else None
+            else:
+                primary = to_float(primary_cell)
+            if primary is None and secondary is not None:
+                primary = secondary + 10
 
-                    # =====================================================
-                    # TEMPERATURE
-                    # =====================================================
-                    if isinstance(temp, str) and temp.strip().upper() == "AMB":
-                        temp = 60
+            if isinstance(temp, str) and temp.strip().upper() == "AMB":
+                temp = 60
 
-                    duration = float(hold) if hold not in [None, ""] else 0
-                    acceptance = 1 if isinstance(remarks, str) and "acceptance" in remarks.lower() else 0
+            duration = float(hold) if hold not in [None, ""] else 0
+            acceptance = 1 if isinstance(remarks, str) and "acceptance" in remarks.lower() else 0
 
-                    interspace = 0
-                    bp_de = 0
-                    bp_nde = 0
-                    if row_test_mode == 1:
-                        bp_de = secondary
-                        bp_nde = secondary
-                    else:
-                        interspace = secondary
+            interspace = 0
+            bp_de = 0
+            bp_nde = 0
+            if row_test_mode == 1:
+                bp_de = secondary
+                bp_nde = secondary
+            else:
+                interspace = secondary
 
-                    # -----------------------------------------------------
-                    # capture per‑step leak values (if present)
-                    # -----------------------------------------------------
-                    inboard_leak = None
-                    outboard_leak = None
-                    if "in" in leak_cols:
-                        inboard_leak = to_float(safe_get(row, leak_cols["in"]))
-                    if "out" in leak_cols:
-                        outboard_leak = to_float(safe_get(row, leak_cols["out"]))
+            # -------------------------------
+            # Leak numbers per step
+            # -------------------------------
+            in_leak = None
+            out_leak = None
+            if "in" in leak_cols:
+                in_leak = to_float(safe_get(row, leak_cols["in"]))
+            if "out" in leak_cols:
+                out_leak = to_float(safe_get(row, leak_cols["out"]))
 
-                    # skip empty
-                    is_empty_row = (
-                        (speed in [None, 0])
-                        and (primary in [None, 0])
-                        and (secondary in [None, 0])
-                        and (hold in [None, 0])
-                        and (not isinstance(remarks, str) or remarks.strip() == "")
-                    )
-                    if is_empty_row:
-                        continue
+            # skip ghost rows
+            if all(
+                v in [None, 0, ""]
+                for v in [speed, primary, secondary, hold]
+            ) and (not isinstance(remarks, str) or remarks.strip() == ""):
+                continue
 
-                    rows.append(
-                        {
-                            "Step": step,
-                            "Speed_RPM": speed,
-                            "Primary seal Gas Pressure (barg)": primary,
-                            "Interspace_Pressure_bar": interspace,
-                            "BackPressure_Drive_End_bar": bp_de,
-                            "BackPressure_Non_Drive_End_bar": bp_nde,
-                            "Gas_Injection_bar": 0,
-                            "Duration_s": duration,
-                            "Acceptance point": acceptance,
-                            "Temperature_C": temp,
-                            "Gas_Type": "Air",
-                            "Test_Mode": row_test_mode,
-                            "Measurement": 1,
-                            "Torque_Check": 0,
-                            "Notes": remarks if remarks else "",
-                            "ISFlowLimits": inboard_leak,
-                            "OBFlowLimits": outboard_leak,
-                        }
-                    )
+            rows.append(
+                {
+                    "Step": step,
+                    "Speed_RPM": speed,
+                    "Primary seal Gas Pressure (barg)": primary,
+                    "Interspace_Pressure_bar": interspace,
+                    "BackPressure_Drive_End_bar": bp_de,
+                    "BackPressure_Non_Drive_End_bar": bp_nde,
+                    "Gas_Injection_bar": 0,
+                    "Duration_s": duration,
+                    "Acceptance point": acceptance,
+                    "Temperature_C": temp,
+                    "Gas_Type": "Air",
+                    "Test_Mode": row_test_mode,
+                    "Measurement": 1,
+                    "Torque_Check": 0,
+                    "Notes": remarks if remarks else "",
+                    "ISFlowLimits": in_leak,
+                    "OBFlowLimits": out_leak,
+                }
+            )
 
     df = pd.DataFrame(rows)
 
-    # =====================================================
-    # STEP DEDUPLICATION
-    # =====================================================
+    # --------------------------------------------------------------
+    # STEP MERGE / DEDUP
+    # --------------------------------------------------------------
     if not df.empty:
 
         def merge_rows(group):
             base = group.iloc[0].copy()
-            for _, row in group.iterrows():
-                for col in group.columns:
-                    vb, vn = base[col], row[col]
+            for _, r in group.iterrows():
+                for c in group.columns:
+                    vb, vn = base[c], r[c]
                     if pd.notna(vb) and vb not in [0, "", None]:
                         continue
                     if pd.notna(vn) and vn not in [0, "", None]:
-                        base[col] = vn
+                        base[c] = vn
             return base
 
         df = (
