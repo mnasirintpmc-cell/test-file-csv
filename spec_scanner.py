@@ -40,7 +40,7 @@ def _detect_engine(file):
 
 
 def scan_spec(file):
-    """Parse specification → dataframe of steps, including inboard/outboard leakage columns."""
+    """Parse specification → dataframe of steps, including Max P/S Leak and Max S/S Leak columns."""
 
     engine = _detect_engine(file)
 
@@ -69,16 +69,29 @@ def scan_spec(file):
 
                 step_col = j
 
-                # --- detect any "max leak" columns in the same header row ---
+                # ---------------------------------------------------------
+                # detect "max leak" columns in the same header row
+                # ---------------------------------------------------------
                 header_row = [str(x).lower() for x in list(df.iloc[i])]
                 leak_cols = {}
+
                 for idx, txt in enumerate(header_row):
                     if "leak" in txt and "max" in txt:
-                        if any(k in txt for k in ["i", "inb", "inboard"]):
+                        txt_clean = txt.replace(" ", " ")  # normalize nbsp
+                        # P/S = primary/inboard
+                        if any(k in txt_clean for k in ["p/s", "ps ", "p s", "primary", "inb", "inboard", "cell"]):
                             leak_cols["in"] = idx
-                        elif any(k in txt for k in ["o", "outb", "outboard"]):
+                        # S/S = secondary/outboard
+                        elif any(k in txt_clean for k in ["s/s", "ss ", "s s", "secondary", "outb", "outboard"]):
+                            leak_cols["out"] = idx
+                        elif "1" in txt_clean or "i/" in txt_clean:
+                            leak_cols["in"] = idx
+                        elif "2" in txt_clean or "o/" in txt_clean:
                             leak_cols["out"] = idx
 
+                # ---------------------------------------------------------
+                # iterate data rows after the header
+                # ---------------------------------------------------------
                 for k in range(i + 1, len(df)):
                     row = df.iloc[k].tolist()
                     step_val = safe_get(row, step_col)
@@ -100,12 +113,15 @@ def scan_spec(file):
                     remarks = safe_get(row, step_col + 8)
 
                     # =====================================================
-                    # TEST MODE DETECTION (safe)
+                    # TEST MODE DETECTION
                     # =====================================================
                     row_test_mode = 1
                     prim_str = str(primary_cell).lower() if isinstance(primary_cell, str) else ""
-                    sec_colname = str(df.iloc[i - 1, step_col + 2]).lower() if i > 0 and step_col + 2 < df.shape[1] else ""
-
+                    sec_colname = (
+                        str(df.iloc[i - 1, step_col + 2]).lower()
+                        if i > 0 and step_col + 2 < df.shape[1]
+                        else ""
+                    )
                     if any(k in prim_str for k in ["sec", "secondary", "inboard", "outboard"]):
                         row_test_mode = 2
                     elif any(k in sec_colname for k in ["sec", "secondary"]):
@@ -141,7 +157,9 @@ def scan_spec(file):
                     else:
                         interspace = secondary
 
-                    # --- capture max leak columns if present ---
+                    # -----------------------------------------------------
+                    # capture per‑step leak values (if present)
+                    # -----------------------------------------------------
                     inboard_leak = None
                     outboard_leak = None
                     if "in" in leak_cols:
@@ -149,7 +167,7 @@ def scan_spec(file):
                     if "out" in leak_cols:
                         outboard_leak = to_float(safe_get(row, leak_cols["out"]))
 
-                    # Skip empty rows
+                    # skip empty
                     is_empty_row = (
                         (speed in [None, 0])
                         and (primary in [None, 0])
@@ -185,7 +203,7 @@ def scan_spec(file):
     df = pd.DataFrame(rows)
 
     # =====================================================
-    # DEDUPLICATE STEPS
+    # STEP DEDUPLICATION
     # =====================================================
     if not df.empty:
 
