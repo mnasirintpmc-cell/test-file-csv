@@ -23,6 +23,25 @@ def to_float(v):
         return None
 
 
+def is_meaningful(v):
+    if v is None:
+        return False
+
+    if isinstance(v, float) and pd.isna(v):
+        return False
+
+    if isinstance(v, str):
+        v_clean = v.strip().lower()
+        if v_clean in ["", "0", "nan", "none", "-", "--"]:
+            return False
+        return True
+
+    if isinstance(v, (int, float)):
+        return v != 0
+
+    return True
+
+
 def _detect_engine(file):
     name = ""
     if hasattr(file, "name"):
@@ -59,9 +78,6 @@ def scan_spec(file):
         if df is None or df.empty:
             continue
 
-        # --------------------------------------------------------------
-        # FIND ALL HEADER ROWS (multi-section support)
-        # --------------------------------------------------------------
         header_indices = [
             i for i in range(len(df))
             if any("test step" in str(x).lower() for x in df.iloc[i].tolist())
@@ -79,7 +95,6 @@ def scan_spec(file):
             col_hold = next((i for i, c in enumerate(header_labels) if "hold" in c), None)
             col_remarks = next((i for i, c in enumerate(header_labels) if "remark" in c), None)
 
-            # leak columns
             leak_cols = {}
             for idx, txt in enumerate(header_labels):
                 if "leak" in txt and "max" in txt:
@@ -89,9 +104,6 @@ def scan_spec(file):
                     elif any(k in txt_clean for k in ["s/s", "ss", "secondary", "outb", "outboard"]):
                         leak_cols["out"] = idx
 
-            # --------------------------------------------------------------
-            # PROCESS SECTION UNTIL "END OF TEST"
-            # --------------------------------------------------------------
             for k in range(h_idx + 1, len(df)):
                 row = df.iloc[k].tolist()
                 step_val = safe_get(row, col_step)
@@ -99,18 +111,16 @@ def scan_spec(file):
                 if step_val is None:
                     continue
 
-                step_str = str(step_val).lower().strip()
+                # ✅ FIX: normalize spaces for robust detection
+                step_str = re.sub(r"\s+", " ", str(step_val).lower()).strip()
 
-                # stop this section only
+                # ✅ FIX: correctly stop at end of section
                 if "end of test" in step_str:
                     break
 
                 if step_str == "":
                     continue
 
-                # ----------------------------------------------------------
-                # robust step parsing
-                # ----------------------------------------------------------
                 step_match = re.search(r"\d+", str(step_val))
                 if not step_match:
                     continue
@@ -124,26 +134,19 @@ def scan_spec(file):
                 hold = to_float(safe_get(row, col_hold))
                 remarks = safe_get(row, col_remarks) or ""
 
-                # leaks
                 in_leak = to_float(safe_get(row, leak_cols.get("in")))
                 out_leak = to_float(safe_get(row, leak_cols.get("out")))
 
-                # ----------------------------------------------------------
-                # FIX: reject non-test garbage rows (like 321991)
-                # REQUIRE: at least one meaningful field besides step
-                # ----------------------------------------------------------
+                # ✅ FIX: strong validation (removes garbage rows like 321991)
                 has_data = any(
-                    v not in [None, 0, ""]
+                    is_meaningful(v)
                     for v in [speed, primary_cell, secondary, hold, in_leak, out_leak]
                 )
-                has_text = isinstance(remarks, str) and remarks.strip() != ""
+                has_text = is_meaningful(remarks)
 
                 if not has_data and not has_text:
                     continue
 
-                # -------------------------------
-                # TEST MODE
-                # -------------------------------
                 row_test_mode = 1
                 prim_str = str(primary_cell).lower() if isinstance(primary_cell, str) else ""
 
@@ -152,9 +155,6 @@ def scan_spec(file):
                 elif (to_float(primary_cell) in [None, 0]) and (secondary not in [None, 0]) and str(primary_cell).strip() == "":
                     row_test_mode = 2
 
-                # -------------------------------
-                # PRIMARY
-                # -------------------------------
                 if isinstance(primary_cell, str) and "secondary" in primary_cell.lower():
                     primary = secondary + 10 if secondary is not None else None
                 else:
@@ -203,9 +203,6 @@ def scan_spec(file):
 
     df = pd.DataFrame(rows)
 
-    # --------------------------------------------------------------
-    # MERGE / DEDUP
-    # --------------------------------------------------------------
     if not df.empty:
 
         def merge_rows(group):
