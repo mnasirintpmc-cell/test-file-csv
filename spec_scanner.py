@@ -78,10 +78,18 @@ def scan_spec(file):
         if df is None or df.empty:
             continue
 
-        header_indices = [
-            i for i in range(len(df))
-            if any("test step" in str(x).lower() for x in df.iloc[i].tolist())
-        ]
+        # --------------------------------------------------------------
+        # STRICT HEADER DETECTION (FIX)
+        # --------------------------------------------------------------
+        header_indices = []
+
+        for i in range(len(df)):
+            row_vals = [str(x).lower() for x in df.iloc[i].tolist()]
+
+            if any("test step" in x for x in row_vals):
+                # ✅ must also contain pressure column → real header
+                if any("pressure" in x for x in row_vals):
+                    header_indices.append(i)
 
         for h_idx in header_indices:
 
@@ -104,6 +112,9 @@ def scan_spec(file):
                     elif any(k in txt_clean for k in ["s/s", "ss", "secondary", "outb", "outboard"]):
                         leak_cols["out"] = idx
 
+            # --------------------------------------------------------------
+            # PROCESS SECTION
+            # --------------------------------------------------------------
             for k in range(h_idx + 1, len(df)):
                 row = df.iloc[k].tolist()
                 step_val = safe_get(row, col_step)
@@ -111,10 +122,9 @@ def scan_spec(file):
                 if step_val is None:
                     continue
 
-                # ✅ FIX: normalize spaces for robust detection
+                # normalize spaces (FIX already applied)
                 step_str = re.sub(r"\s+", " ", str(step_val).lower()).strip()
 
-                # ✅ FIX: correctly stop at end of section
                 if "end of test" in step_str:
                     break
 
@@ -137,7 +147,7 @@ def scan_spec(file):
                 in_leak = to_float(safe_get(row, leak_cols.get("in")))
                 out_leak = to_float(safe_get(row, leak_cols.get("out")))
 
-                # ✅ FIX: strong validation (removes garbage rows like 321991)
+                # strict validation (FIX already applied)
                 has_data = any(
                     is_meaningful(v)
                     for v in [speed, primary_cell, secondary, hold, in_leak, out_leak]
