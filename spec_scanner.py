@@ -60,7 +60,7 @@ def scan_spec(file):
             continue
 
         # --------------------------------------------------------------
-        # FIND ALL HEADER ROWS (supports multiple sections)
+        # FIND ALL HEADER ROWS (multi-section support)
         # --------------------------------------------------------------
         header_indices = [
             i for i in range(len(df))
@@ -71,9 +71,6 @@ def scan_spec(file):
 
             header_labels = [str(x).strip().lower() for x in df.iloc[h_idx]]
 
-            # --------------------------------------------------------------
-            # column detection per section
-            # --------------------------------------------------------------
             col_step = next((i for i, c in enumerate(header_labels) if "test step" in c), None)
             col_primary = next((i for i, c in enumerate(header_labels) if "primary" in c and "pressure" in c), None)
             col_secondary = next((i for i, c in enumerate(header_labels) if "secondary" in c and "pressure" in c), None)
@@ -104,17 +101,20 @@ def scan_spec(file):
 
                 step_str = str(step_val).lower().strip()
 
-                # stop only this section
+                # stop this section only
                 if "end of test" in step_str:
                     break
 
                 if step_str == "":
                     continue
 
+                # ----------------------------------------------------------
                 # robust step parsing
+                # ----------------------------------------------------------
                 step_match = re.search(r"\d+", str(step_val))
                 if not step_match:
                     continue
+
                 step = int(step_match.group())
 
                 primary_cell = safe_get(row, col_primary)
@@ -123,6 +123,23 @@ def scan_spec(file):
                 temp = safe_get(row, col_temp)
                 hold = to_float(safe_get(row, col_hold))
                 remarks = safe_get(row, col_remarks) or ""
+
+                # leaks
+                in_leak = to_float(safe_get(row, leak_cols.get("in")))
+                out_leak = to_float(safe_get(row, leak_cols.get("out")))
+
+                # ----------------------------------------------------------
+                # FIX: reject non-test garbage rows (like 321991)
+                # REQUIRE: at least one meaningful field besides step
+                # ----------------------------------------------------------
+                has_data = any(
+                    v not in [None, 0, ""]
+                    for v in [speed, primary_cell, secondary, hold, in_leak, out_leak]
+                )
+                has_text = isinstance(remarks, str) and remarks.strip() != ""
+
+                if not has_data and not has_text:
+                    continue
 
                 # -------------------------------
                 # TEST MODE
@@ -161,22 +178,6 @@ def scan_spec(file):
                     bp_nde = secondary
                 else:
                     interspace = secondary
-
-                # -------------------------------
-                # leaks
-                # -------------------------------
-                in_leak = to_float(safe_get(row, leak_cols.get("in")))
-                out_leak = to_float(safe_get(row, leak_cols.get("out")))
-
-                # keep leakage-only rows
-                has_data = any(
-                    v not in [None, 0, ""]
-                    for v in [speed, primary, secondary, hold, in_leak, out_leak]
-                )
-                has_text = isinstance(remarks, str) and remarks.strip() != ""
-
-                if not has_data and not has_text:
-                    continue
 
                 rows.append(
                     {
