@@ -68,10 +68,24 @@ def build_machine_csv(df):
         machine_df["TST_OBFlowLimits"] = df["OBFlowLimits"]
 
     numeric_cols = [
-        "TST_SpeedDem", "TST_CellPresDemand", "TST_InterPresDemand",
-        "TST_InterBPDemand_DE", "TST_InterBPDemand_NDE",
-        "TST_GasInjectionDemand", "TST_StepDuration", "TST_APFlag",
-        "TST_TempDemand", "TST_TestMode", "TST_MeasurementReq", "TST_TorqueCheck"
+        "TST_SpeedDem",
+    "TST_CellPresDemand",
+    "TST_InterPresDemand",
+    "TST_InterPresDemand_2",
+    "TST_InterBPDemand_DE",
+    "TST_InterBPDemand_DE_2",
+    "TST_InterBPDemand_NDE",
+    "TST_InterBPDemand_NDE_2",
+    "TST_GasInjectionDemand",
+    "TST_StepDuration",
+    "TST_APFlag",
+    "TST_TempDemand",
+    "TST_TestMode",
+    "TST_MeasurementReq",
+    "TST_TorqueCheck",
+    "TST_ISFlowLimit",
+    "TST_ISFlowLimit_2",
+    "TST_OBFlowLimit",
     ]
 
     for col in numeric_cols:
@@ -153,7 +167,23 @@ def get_column_mapping():
          "TST_OBFlowLimit": "Outboard flow limit",
     }
 
+# =====================================================
+# MACHINE -> TECHNICIAN CONVERSION
+# =====================================================
 
+def convert_machine_to_technician(df):
+
+    mapping = get_column_mapping()
+
+    tech_df = df.rename(columns=mapping)
+
+    if "Step" not in tech_df.columns:
+        tech_df.insert(0, "Step", range(1, len(tech_df) + 1))
+
+    if "Notes" not in tech_df.columns:
+        tech_df["Notes"] = ""
+
+    return tech_df
 # =====================================================
 # EXCEL CREATOR – ensures FlowLimits visible columns
 # =====================================================
@@ -287,12 +317,29 @@ def main():
     )
 
     if operation == "CSV → Excel":
-        uploaded = st.file_uploader("Upload Machine CSV", type=["csv"])
-        if uploaded:
-            df = safe_read_csv(uploaded)
-            excel = create_professional_excel_from_data(
-                df, "main_seal", user_name=user_name, source_name=uploaded.name
-            )
+        uploaded = st.file_uploader(
+        "Upload Machine CSV",
+        type=["csv"]
+    )
+
+    if uploaded:
+
+        df = safe_read_csv(uploaded)
+
+        tech_df = convert_machine_to_technician(df)
+
+        excel = create_professional_excel_from_data(
+            tech_df,
+            "main_seal",
+            user_name=user_name,
+            source_name=uploaded.name
+        )
+
+        st.download_button(
+            "Download Excel",
+            excel.getvalue(),
+            file_name="technician_sequence.xlsx"
+        )
             st.download_button(
                 "Download Excel",
                 excel.getvalue(),
