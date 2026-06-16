@@ -39,11 +39,15 @@ def build_machine_csv(df):
         return df[name] if name in df.columns else pd.Series([np.nan] * len(df))
 
     machine_df = pd.DataFrame({
+        "TST_TestPoint": safe_col("Test Point"),
         "TST_SpeedDem": safe_col("Speed_RPM"),
         "TST_CellPresDemand": safe_col("Primary seal Gas Pressure (barg)"),
         "TST_InterPresDemand": safe_col("Interspace_Pressure_bar"),
+        "TST_InterPresDemand_2": safe_col("Interspace_Pressure_2_bar"),
         "TST_InterBPDemand_DE": safe_col("BackPressure_Drive_End_bar"),
+        "TST_InterBPDemand_DE_2": safe_col("BackPressure_Drive_End_2_bar"),
         "TST_InterBPDemand_NDE": safe_col("BackPressure_Non_Drive_End_bar"),
+        "TST_InterBPDemand_NDE_2": safe_col("BackPressure_Non_Drive_End_2_bar"),
         "TST_GasInjectionDemand": safe_col("Gas_Injection_bar"),
         "TST_StepDuration": safe_col("Duration_s"),
         "TST_APFlag": safe_col("Acceptance point"),
@@ -52,6 +56,8 @@ def build_machine_csv(df):
         "TST_TestMode": safe_col("Test_Mode"),
         "TST_MeasurementReq": safe_col("Measurement"),
         "TST_TorqueCheck": safe_col("Torque_Check"),
+        "TST_ISFlowLimit": safe_col("Interspace flow limit"),
+        "TST_ISFlowLimit_2": safe_col("Interspace 2 flow limit"),
     })
 
     # --- Add Flow Limits if they exist ---
