@@ -315,9 +315,9 @@ def main():
         "Operation",
         ["CSV → Excel", "Excel → CSV", "Spec → Technician Excel"]
     )
+if operation == "CSV → Excel":
 
-    if operation == "CSV → Excel":
-        uploaded = st.file_uploader(
+    uploaded = st.file_uploader(
         "Upload Machine CSV",
         type=["csv"]
     )
@@ -340,12 +340,6 @@ def main():
             excel.getvalue(),
             file_name="technician_sequence.xlsx"
         )
-            st.download_button(
-                "Download Excel",
-                excel.getvalue(),
-                file_name="technician_sequence.xlsx"
-            )
-
     elif operation == "Excel → CSV":
         uploaded = st.file_uploader("Upload Technician Excel", type=["xlsx"])
         if uploaded:
