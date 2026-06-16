@@ -302,10 +302,12 @@ def editable_dataframe(df):
 # =====================================================
 
 def main():
+
     st.title("⚙️ DGS Test Manager")
 
     if "master_df" not in st.session_state:
         st.session_state.master_df = None
+
     if "last_uploaded_file" not in st.session_state:
         st.session_state.last_uploaded_file = None
 
@@ -315,6 +317,35 @@ def main():
         "Operation",
         ["CSV → Excel", "Excel → CSV", "Spec → Technician Excel"]
     )
+
+    if operation == "CSV → Excel":
+
+        uploaded = st.file_uploader(
+            "Upload Machine CSV",
+            type=["csv"]
+        )
+
+        if uploaded:
+
+            df = safe_read_csv(uploaded)
+
+            tech_df = convert_machine_to_technician(df)
+
+            excel = create_professional_excel_from_data(
+                tech_df,
+                "main_seal",
+                user_name=user_name,
+                source_name=uploaded.name
+            )
+
+            st.download_button(
+                "Download Excel",
+                excel.getvalue(),
+                file_name="technician_sequence.xlsx"
+            )
+
+    elif operation == "Excel → CSV":
+        ...
 if operation == "CSV → Excel":
 
     uploaded = st.file_uploader(
