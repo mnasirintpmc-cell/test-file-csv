@@ -58,6 +58,7 @@ def build_machine_csv(df):
         "TST_TorqueCheck": safe_col("Torque_Check"),
         "TST_ISFlowLimit": safe_col("Interspace flow limit"),
         "TST_ISFlowLimit_2": safe_col("Interspace 2 flow limit"),
+        "TST_OBFlowLimit": safe_col("Outboard flow limit"),
     })
 
     # --- Add Flow Limits if they exist ---
