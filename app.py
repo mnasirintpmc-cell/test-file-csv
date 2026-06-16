@@ -131,11 +131,15 @@ def detect_file_type(df):
 
 def get_column_mapping():
     return {
+        "TST_TestPoint":"Test Point",
         "TST_SpeedDem": "Speed_RPM",
         "TST_CellPresDemand": "Primary seal Gas Pressure (barg)",
         "TST_InterPresDemand": "Interspace_Pressure_bar",
+        "TST_InterPresDemand_2": "Interspace_Pressure_2_bar",
         "TST_InterBPDemand_DE": "BackPressure_Drive_End_bar",
+        "TST_InterBPDemand_DE_2":"BackPressure_Drive_End_2_bar",
         "TST_InterBPDemand_NDE": "BackPressure_Non_Drive_End_bar",
+         "TST_InterBPDemand_NDE_2": "BackPressure_Non_Drive_End_2_bar",
         "TST_GasInjectionDemand": "Gas_Injection_bar",
         "TST_StepDuration": "Duration_s",
         "TST_APFlag": "Acceptance point",
@@ -144,6 +148,9 @@ def get_column_mapping():
         "TST_TestMode": "Test_Mode",
         "TST_MeasurementReq": "Measurement",
         "TST_TorqueCheck": "Torque_Check",
+        "TST_ISFlowLimit": "Interspace flow limit",
+         "TST_ISFlowLimit_2": "Interspace flow limit 2",
+         "TST_OBFlowLimit": "Outboard flow limit"),
     }
 
 
