@@ -150,7 +150,7 @@ def get_column_mapping():
         "TST_TorqueCheck": "Torque_Check",
         "TST_ISFlowLimit": "Interspace flow limit",
          "TST_ISFlowLimit_2": "Interspace flow limit 2",
-         "TST_OBFlowLimit": "Outboard flow limit"),
+         "TST_OBFlowLimit": "Outboard flow limit",
     }
 
 
