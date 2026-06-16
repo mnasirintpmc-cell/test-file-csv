@@ -39,7 +39,7 @@ def build_machine_csv(df):
         return df[name] if name in df.columns else pd.Series([np.nan] * len(df))
 
     machine_df = pd.DataFrame({
-        "TST_TestPoint": safe_col("Test Point"),
+        "TST_TestPointNum": safe_col("Test Point"),
         "TST_SpeedDem": safe_col("Speed_RPM"),
         "TST_CellPresDemand": safe_col("Primary seal Gas Pressure (barg)"),
         "TST_InterPresDemand": safe_col("Interspace_Pressure_bar"),
@@ -68,7 +68,8 @@ def build_machine_csv(df):
         machine_df["TST_OBFlowLimits"] = df["OBFlowLimits"]
 
     numeric_cols = [
-        "TST_SpeedDem",
+    "TST_TestPointNum",
+    "TST_SpeedDem",
     "TST_CellPresDemand",
     "TST_InterPresDemand",
     "TST_InterPresDemand_2",
