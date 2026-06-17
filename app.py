@@ -39,7 +39,7 @@ def build_machine_csv(df):
         return df[name] if name in df.columns else pd.Series([np.nan] * len(df))
 
     machine_df = pd.DataFrame({
-        "TST_TestPointNum": safe_col("Test Point"),
+        "TST_TestPointNum": safe_col("Step"),
         "TST_SpeedDem": safe_col("Speed_RPM"),
         "TST_CellPresDemand": safe_col("Primary seal Gas Pressure (barg)"),
         "TST_InterPresDemand": safe_col("Interspace_Pressure_bar"),
@@ -146,7 +146,7 @@ def detect_file_type(df):
 
 def get_column_mapping():
     return {
-        "TST_TestPointNum":"Test Point",
+        "TST_TestPointNum":"Step",
         "TST_SpeedDem": "Speed_RPM",
         "TST_CellPresDemand": "Primary seal Gas Pressure (barg)",
         "TST_InterPresDemand": "Interspace_Pressure_bar",
