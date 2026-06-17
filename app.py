@@ -146,7 +146,7 @@ def detect_file_type(df):
 
 def get_column_mapping():
     return {
-        "TST_TestPoint":"Test Point",
+        "TST_TestPointNum":"Test Point",
         "TST_SpeedDem": "Speed_RPM",
         "TST_CellPresDemand": "Primary seal Gas Pressure (barg)",
         "TST_InterPresDemand": "Interspace_Pressure_bar",
